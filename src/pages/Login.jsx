@@ -1,16 +1,60 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
   const nav = useNavigate();
 
-  function submit(e) {
+  // If already logged in → go to dashboard
+  useEffect(() => {
+    if (localStorage.getItem("token")) {
+      nav("/login");
+    }
+  }, []);
+
+  async function submit(e) {
     e.preventDefault();
-    // TODO: call auth API
-    nav("/dashboard");
+    setErr("");
+    setLoading(true);
+
+    try {
+      const form = new URLSearchParams();
+      form.append("grant_type", "password");
+      form.append("username", email);
+      form.append("password", pass);
+      form.append("scope", "");
+      form.append("client_id", "string");
+      form.append("client_secret", "string");
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: form,
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Invalid Credentials");
+      }
+
+      const data = await res.json();
+
+      // Save JWT securely
+      localStorage.setItem("token", data.access_token);
+
+      nav("/dashboard");
+    } catch (error) {
+      setErr(error.message);
+    }
+
+    setLoading(false);
   }
 
   return (
@@ -21,7 +65,7 @@ export default function Login() {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        paddingTop: "6rem", // accounts for fixed navbar
+        paddingTop: "6rem",
       }}
     >
       <div
@@ -35,7 +79,7 @@ export default function Login() {
           textAlign: "center",
         }}
       >
-        {/* 🔹 Logo and Title */}
+        {/* Logo */}
         <div
           style={{
             display: "flex",
@@ -66,14 +110,24 @@ export default function Login() {
           </div>
         </div>
 
-        <h2 style={{ margin: "0 0 0.5rem 0", color: "#1E1E2F" }}>
+        <h2 style={{ marginBottom: "0.5rem", color: "#1E1E2F" }}>
           Welcome Back 👋
         </h2>
-        <p style={{ color: "#606074", marginBottom: "2rem" }}>
-          Login to continue your meetings
-        </p>
 
-        {/* 🔐 Login Form */}
+        {err && (
+          <div
+            style={{
+              background: "#ffe5e5",
+              color: "#ff3b3b",
+              padding: "0.8rem",
+              borderRadius: 10,
+              marginBottom: "1rem",
+            }}
+          >
+            {err}
+          </div>
+        )}
+
         <form onSubmit={submit} style={{ textAlign: "left" }}>
           <label className="small-muted">Email</label>
           <input
@@ -94,7 +148,7 @@ export default function Login() {
 
           <div style={{ marginTop: "1.5rem" }}>
             <ActionButton type="submit" style={{ width: "100%" }}>
-              Login
+              {loading ? "Logging in..." : "Login"}
             </ActionButton>
           </div>
         </form>
@@ -102,11 +156,7 @@ export default function Login() {
         <p style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#606074" }}>
           Don’t have an account?{" "}
           <span
-            style={{
-              color: "#6759FF",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            style={{ color: "#6759FF", fontWeight: 600, cursor: "pointer" }}
             onClick={() => nav("/register")}
           >
             Sign Up

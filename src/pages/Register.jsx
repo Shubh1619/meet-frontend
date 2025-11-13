@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 
@@ -6,12 +6,70 @@ export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+
   const nav = useNavigate();
 
-  function submit(e) {
+  // 🚀 If already logged in → redirect to dashboard
+  useEffect(() => {
+    if (localStorage.getItem("token")) {
+      nav("/register");
+    }
+  }, []);
+
+  async function submit(e) {
     e.preventDefault();
-    // TODO: register API
-    nav("/dashboard");
+    setErr("");
+    setLoading(true);
+
+    try {
+      const payload = { name, email, password: pass };
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Registration failed");
+      }
+
+      // Registration successful → auto login
+      const loginForm = new URLSearchParams();
+      loginForm.append("grant_type", "password");
+      loginForm.append("username", email);
+      loginForm.append("password", pass);
+      loginForm.append("scope", "");
+      loginForm.append("client_id", "string");
+      loginForm.append("client_secret", "string");
+
+      const loginRes = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: loginForm,
+      });
+
+      const loginData = await loginRes.json();
+
+      if (!loginRes.ok) {
+        throw new Error(loginData.detail || "Auto login failed");
+      }
+
+      // Save token
+      localStorage.setItem("token", loginData.access_token);
+
+      nav("/dashboard");
+    } catch (error) {
+      setErr(error.message);
+    }
+
+    setLoading(false);
   }
 
   return (
@@ -22,7 +80,7 @@ export default function Register() {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        paddingTop: "6rem", // accounts for navbar height
+        paddingTop: "6rem",
       }}
     >
       <div
@@ -36,7 +94,7 @@ export default function Register() {
           textAlign: "center",
         }}
       >
-        {/* Logo and Title */}
+        {/* Logo */}
         <div
           style={{
             display: "flex",
@@ -67,12 +125,23 @@ export default function Register() {
           </div>
         </div>
 
-        <h2 style={{ margin: "0 0 0.5rem 0", color: "#1E1E2F" }}>
+        <h2 style={{ marginBottom: "0.5rem", color: "#1E1E2F" }}>
           Create Your Account ✨
         </h2>
-        <p style={{ color: "#606074", marginBottom: "2rem" }}>
-          Join Meetify and start managing smarter meetings
-        </p>
+
+        {err && (
+          <div
+            style={{
+              background: "#ffe5e5",
+              color: "#ff3b3b",
+              padding: "0.8rem",
+              borderRadius: 10,
+              marginBottom: "1rem",
+            }}
+          >
+            {err}
+          </div>
+        )}
 
         <form onSubmit={submit} style={{ textAlign: "left" }}>
           <label className="small-muted">Name</label>
@@ -102,7 +171,7 @@ export default function Register() {
 
           <div style={{ marginTop: "1.5rem" }}>
             <ActionButton type="submit" style={{ width: "100%" }}>
-              Create Account
+              {loading ? "Creating..." : "Create Account"}
             </ActionButton>
           </div>
         </form>
@@ -110,11 +179,7 @@ export default function Register() {
         <p style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#606074" }}>
           Already have an account?{" "}
           <span
-            style={{
-              color: "#6759FF",
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            style={{ color: "#6759FF", fontWeight: 600, cursor: "pointer" }}
             onClick={() => nav("/login")}
           >
             Login
