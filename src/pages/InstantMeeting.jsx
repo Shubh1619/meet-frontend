@@ -12,7 +12,6 @@ export default function InstantMeeting() {
   function createInstant(e) {
     e.preventDefault();
 
-    // Generate unique meeting link
     const id = "inst-" + Math.random().toString(36).slice(2, 9);
     const link = `${window.location.origin}/meeting/${id}`;
 
@@ -44,8 +43,8 @@ export default function InstantMeeting() {
         background: "#F8F9FF",
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
-        paddingTop: "4rem",
+        alignItems: "flex-start",
+        paddingTop: "6rem", // added top spacing for fixed navbar
       }}
     >
       <div
@@ -57,10 +56,9 @@ export default function InstantMeeting() {
           width: "100%",
           textAlign: "center",
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
-          transition: "all 0.3s ease",
         }}
       >
-        {/* 🔹 Meetify Logo Header */}
+        {/* 💜 Logo Header */}
         <div
           style={{
             display: "flex",
@@ -91,7 +89,6 @@ export default function InstantMeeting() {
           </div>
         </div>
 
-        {/* 🧩 Create or Show Meeting */}
         {!meetingLink ? (
           <>
             <h2 style={{ color: "#1E1E2F", marginBottom: "0.5rem" }}>
@@ -102,7 +99,7 @@ export default function InstantMeeting() {
             </p>
 
             <form onSubmit={createInstant} style={{ textAlign: "left" }}>
-              {/* Meeting Topic */}
+              {/* Topic */}
               <label style={{ fontSize: "0.9rem", color: "#606074" }}>
                 Meeting Topic
               </label>
@@ -147,7 +144,7 @@ export default function InstantMeeting() {
                 required
               />
 
-              {/* Participants (Optional) */}
+              {/* Participants */}
               <label style={{ fontSize: "0.9rem", color: "#606074" }}>
                 Participants <span style={{ color: "#999" }}>(optional)</span>
               </label>
@@ -168,7 +165,6 @@ export default function InstantMeeting() {
                 }}
               />
 
-              {/* Create Button */}
               <ActionButton
                 type="submit"
                 style={{
@@ -229,8 +225,14 @@ export default function InstantMeeting() {
               </button>
             </div>
 
-            {/* Action Buttons */}
-            <div style={{ display: "flex", gap: "0.8rem", justifyContent: "center" }}>
+            {/* Buttons */}
+            <div
+              style={{
+                display: "flex",
+                gap: "0.8rem",
+                justifyContent: "center",
+              }}
+            >
               <ActionButton
                 onClick={joinMeeting}
                 style={{ flex: 1, padding: "0.8rem" }}

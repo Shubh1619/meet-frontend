@@ -56,7 +56,7 @@ export default function ScheduleMeeting() {
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          paddingTop: "4rem",
+          paddingTop: "6rem",
         }}
       >
         <Box
