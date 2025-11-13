@@ -1,39 +1,60 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
+import { apiPost } from "../api";
 
 export default function InstantMeeting() {
-  const [topic, setTopic] = useState("");
+  const [title, setTitle] = useState("");
   const [agenda, setAgenda] = useState("");
   const [participants, setParticipants] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const nav = useNavigate();
 
-  function createInstant(e) {
+  async function createInstant(e) {
     e.preventDefault();
-
-    const id = "inst-" + Math.random().toString(36).slice(2, 9);
-    const link = `${window.location.origin}/meeting/${id}`;
+    setLoading(true);
 
     const payload = {
-      topic,
+      title,
       agenda,
       participants: participants
         ? participants.split(",").map((p) => p.trim()).filter(Boolean)
         : [],
     };
 
-    console.log("✅ Meeting Created:", payload);
-    setMeetingLink(link);
+    try {
+      const res = await apiPost("/instant", payload);
+
+      // BACKEND RESPONSE:
+      // {
+      //   msg: "...",
+      //   meeting_id: 15,
+      //   join_link: "https://....",
+      //   participants: []
+      // }
+
+      setMeetingLink(res.join_link);
+    } catch (err) {
+      alert("❌ Error: " + err.message);
+    }
+
+    setLoading(false);
   }
 
   function copyToClipboard() {
     navigator.clipboard.writeText(meetingLink);
-    alert("✅ Meeting link copied to clipboard!");
+    alert("✅ Meeting link copied!");
   }
 
   function joinMeeting() {
-    if (meetingLink) nav(meetingLink.replace(window.location.origin, ""));
+    if (!meetingLink) return;
+
+    // Extract the path after domain
+    const urlObj = new URL(meetingLink);
+    const roomId = urlObj.searchParams.get("room");
+    nav(`/meeting/${roomId}`);
   }
 
   return (
@@ -44,7 +65,7 @@ export default function InstantMeeting() {
         display: "flex",
         justifyContent: "center",
         alignItems: "flex-start",
-        paddingTop: "6rem", // added top spacing for fixed navbar
+        paddingTop: "6rem",
       }}
     >
       <div
@@ -58,7 +79,7 @@ export default function InstantMeeting() {
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
         }}
       >
-        {/* 💜 Logo Header */}
+        {/* Logo Section */}
         <div
           style={{
             display: "flex",
@@ -89,35 +110,27 @@ export default function InstantMeeting() {
           </div>
         </div>
 
+        {/* BEFORE MEETING CREATION */}
         {!meetingLink ? (
           <>
             <h2 style={{ color: "#1E1E2F", marginBottom: "0.5rem" }}>
               Create Instant Meeting ⚡
             </h2>
             <p style={{ color: "#606074", marginBottom: "2rem" }}>
-              Set up a quick meeting and share the link instantly.
+              Quickly launch a meeting link and share it instantly!
             </p>
 
             <form onSubmit={createInstant} style={{ textAlign: "left" }}>
-              {/* Topic */}
+              {/* Title */}
               <label style={{ fontSize: "0.9rem", color: "#606074" }}>
-                Meeting Topic
+                Title
               </label>
               <input
                 type="text"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="e.g. Project Kickoff"
-                style={{
-                  width: "100%",
-                  marginTop: 6,
-                  marginBottom: 14,
-                  padding: "0.75rem",
-                  borderRadius: 10,
-                  border: "1px solid #ddd",
-                  fontSize: "1rem",
-                  outlineColor: "#6759FF",
-                }}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Team Sync"
+                style={inputStyle}
                 required
               />
 
@@ -128,23 +141,16 @@ export default function InstantMeeting() {
               <textarea
                 value={agenda}
                 onChange={(e) => setAgenda(e.target.value)}
-                placeholder="Discuss project roadmap, milestones, and design overview."
+                placeholder="Describe meeting agenda..."
                 style={{
-                  width: "100%",
-                  marginTop: 6,
-                  marginBottom: 14,
-                  padding: "0.75rem",
-                  borderRadius: 10,
-                  border: "1px solid #ddd",
-                  fontSize: "1rem",
-                  outlineColor: "#6759FF",
+                  ...inputStyle,
+                  height: "90px",
                   resize: "none",
-                  minHeight: "90px",
                 }}
                 required
-              />
+              ></textarea>
 
-              {/* Participants */}
+              {/* Participants (Optional) */}
               <label style={{ fontSize: "0.9rem", color: "#606074" }}>
                 Participants <span style={{ color: "#999" }}>(optional)</span>
               </label>
@@ -153,92 +159,54 @@ export default function InstantMeeting() {
                 value={participants}
                 onChange={(e) => setParticipants(e.target.value)}
                 placeholder="Enter emails separated by commas"
-                style={{
-                  width: "100%",
-                  marginTop: 6,
-                  marginBottom: 24,
-                  padding: "0.75rem",
-                  borderRadius: 10,
-                  border: "1px solid #ddd",
-                  fontSize: "1rem",
-                  outlineColor: "#6759FF",
-                }}
+                style={inputStyle}
               />
 
               <ActionButton
                 type="submit"
-                style={{
-                  width: "100%",
-                  padding: "0.9rem 2rem",
-                  fontSize: "1.1rem",
-                  borderRadius: "10px",
-                }}
+                style={{ width: "100%", padding: "0.9rem", fontSize: "1.1rem" }}
               >
-                Create Instant Meeting
+                {loading ? "Creating..." : "Create Meeting"}
               </ActionButton>
             </form>
           </>
         ) : (
           <>
-            <h2 style={{ color: "#1E1E2F", marginBottom: "0.5rem" }}>
+            {/* AFTER MEETING CREATED */}
+            <h2 style={{ color: "#1E1E2F", marginBottom: "1rem" }}>
               Meeting Created 🎉
             </h2>
-            <p style={{ color: "#606074", marginBottom: "1.5rem" }}>
-              Share this link with participants to join instantly:
+            <p style={{ color: "#606074", marginBottom: "1.2rem" }}>
+              Share this link with participants:
             </p>
 
-            {/* Meeting Link Display */}
-            <div
-              style={{
-                background: "#F8F9FF",
-                padding: "0.75rem 1rem",
-                borderRadius: 10,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                border: "1px solid rgba(0,0,0,0.05)",
-                marginBottom: "1.5rem",
-              }}
-            >
+            {/* Display Link */}
+            <div style={linkBoxStyle}>
               <span
                 style={{
-                  color: "#1E1E2F",
-                  fontSize: "0.9rem",
+                  flex: 1,
+                  whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
                 }}
               >
                 {meetingLink}
               </span>
-              <button
-                onClick={copyToClipboard}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#6759FF",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                  marginLeft: "0.5rem",
-                }}
-              >
+
+              <button onClick={copyToClipboard} style={copyBtnStyle}>
                 Copy
               </button>
             </div>
 
-            {/* Buttons */}
-            <div
-              style={{
-                display: "flex",
-                gap: "0.8rem",
-                justifyContent: "center",
-              }}
-            >
+            {/* Action Buttons */}
+            <div style={{ display: "flex", gap: "0.8rem", marginTop: "1rem" }}>
               <ActionButton
                 onClick={joinMeeting}
                 style={{ flex: 1, padding: "0.8rem" }}
               >
                 Join Now
               </ActionButton>
+
               <ActionButton
                 variant="ghost"
                 onClick={() => setMeetingLink("")}
@@ -253,3 +221,38 @@ export default function InstantMeeting() {
     </div>
   );
 }
+
+/* -------------------------------------------
+   Inline Styles
+------------------------------------------- */
+
+const inputStyle = {
+  width: "100%",
+  marginTop: 6,
+  marginBottom: 16,
+  padding: "0.75rem",
+  borderRadius: 10,
+  border: "1px solid #ddd",
+  fontSize: "1rem",
+  outlineColor: "#6759FF",
+};
+
+const linkBoxStyle = {
+  background: "#F8F9FF",
+  padding: "0.75rem 1rem",
+  borderRadius: 10,
+  border: "1px solid rgba(0,0,0,0.08)",
+  display: "flex",
+  alignItems: "center",
+  gap: "0.5rem",
+};
+
+const copyBtnStyle = {
+  background: "none",
+  border: "none",
+  color: "#6759FF",
+  fontSize: "0.9rem",
+  fontWeight: 600,
+  cursor: "pointer",
+};
+

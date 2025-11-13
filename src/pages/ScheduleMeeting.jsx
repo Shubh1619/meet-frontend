@@ -11,8 +11,8 @@ import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DatePicker, TimePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
 import ActionButton from "../components/ActionButton";
+import { apiPost } from "../api";
 
-// 💜 Meetify Theme
 const theme = createTheme({
   palette: {
     primary: { main: "#6759FF" },
@@ -26,24 +26,34 @@ export default function ScheduleMeeting() {
   const [topic, setTopic] = useState("");
   const [agenda, setAgenda] = useState("");
   const [participants, setParticipants] = useState("");
+
   const [date, setDate] = useState(dayjs());
   const [startTime, setStartTime] = useState(dayjs());
   const [endTime, setEndTime] = useState(dayjs().add(1, "hour"));
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+
     const payload = {
-      topic,
+      title: topic,
       agenda,
-      start_time: startTime.toISOString(),
-      end_time: endTime.toISOString(),
+      start_time: startTime.toISOString().replace("Z", ""), // FIXED
+      end_time: endTime.toISOString().replace("Z", ""),     // FIXED
       participants: participants
         ? participants.split(",").map((p) => p.trim()).filter(Boolean)
         : [],
     };
 
-    console.log("📅 Meeting Scheduled:", payload);
-    alert("✅ Meeting scheduled successfully!");
+    console.log("📅 Sending:", payload);
+
+    try {
+      const res = await apiPost("/schedule", payload);
+      alert("✅ Meeting scheduled successfully!");
+      console.log(res);
+    } catch (err) {
+      alert("❌ Failed to schedule meeting");
+      console.error(err);
+    }
   };
 
   return (
@@ -69,7 +79,7 @@ export default function ScheduleMeeting() {
             maxWidth: 720,
           }}
         >
-          {/* 💜 Header */}
+          {/* Logo */}
           <Box
             sx={{
               display: "flex",
@@ -84,8 +94,7 @@ export default function ScheduleMeeting() {
                 width: 36,
                 height: 36,
                 borderRadius: 1,
-                background:
-                  "linear-gradient(135deg, #6759FF, #A79BFF)",
+                background: "linear-gradient(135deg, #6759FF, #A79BFF)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -96,24 +105,12 @@ export default function ScheduleMeeting() {
             >
               M
             </Box>
-            <Box
-              sx={{
-                fontSize: 20,
-                fontWeight: 600,
-                color: "primary.main",
-              }}
-            >
+            <Box sx={{ fontSize: 20, fontWeight: 600, color: "primary.main" }}>
               Meetify
             </Box>
           </Box>
 
-          <h2
-            style={{
-              textAlign: "center",
-              color: "#1E1E2F",
-              marginBottom: "1rem",
-            }}
-          >
+          <h2 style={{ textAlign: "center", color: "#1E1E2F", marginBottom: "1rem" }}>
             Schedule a Meeting 📅
           </h2>
 
@@ -144,7 +141,7 @@ export default function ScheduleMeeting() {
               required
             />
 
-            {/* Date + Time */}
+            {/* Date & Time */}
             <LocalizationProvider dateAdapter={AdapterDayjs}>
               <Box
                 sx={{
@@ -158,31 +155,25 @@ export default function ScheduleMeeting() {
                 <DatePicker
                   label="Select Date"
                   value={date}
-                  onChange={(newValue) => setDate(newValue)}
-                  slotProps={{
-                    textField: { fullWidth: true, size: "small" },
-                  }}
+                  onChange={(v) => setDate(v)}
+                  slotProps={{ textField: { fullWidth: true, size: "small" } }}
                 />
                 <TimePicker
                   label="Start Time"
                   value={startTime}
-                  onChange={(newValue) => setStartTime(newValue)}
-                  slotProps={{
-                    textField: { fullWidth: true, size: "small" },
-                  }}
+                  onChange={(v) => setStartTime(v)}
+                  slotProps={{ textField: { fullWidth: true, size: "small" } }}
                 />
                 <TimePicker
                   label="End Time"
                   value={endTime}
-                  onChange={(newValue) => setEndTime(newValue)}
-                  slotProps={{
-                    textField: { fullWidth: true, size: "small" },
-                  }}
+                  onChange={(v) => setEndTime(v)}
+                  slotProps={{ textField: { fullWidth: true, size: "small" } }}
                 />
               </Box>
             </LocalizationProvider>
 
-            {/* Participants */}
+            {/* Participants (optional) */}
             <label className="small-muted">
               Participants <span style={{ color: "#999" }}>(optional)</span>
             </label>
@@ -190,7 +181,7 @@ export default function ScheduleMeeting() {
               fullWidth
               size="small"
               margin="dense"
-              placeholder="Enter emails separated by commas"
+              placeholder="emails separated by commas"
               value={participants}
               onChange={(e) => setParticipants(e.target.value)}
             />
