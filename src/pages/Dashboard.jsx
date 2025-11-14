@@ -5,59 +5,103 @@ import ActionButton from "../components/ActionButton";
 import { apiGet } from "../api";
 
 export default function Dashboard() {
-  // Current date → YYYY-MM-DD
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
 
   const [meetings, setMeetings] = useState([]);
   const [noteText, setNoteText] = useState("");
 
-  // --------------------------
-  // 🔄 Load Meetings for selected date
-  // --------------------------
+  // NEW STATES FOR HIGHLIGHTING DATES
+  const [meetingDates, setMeetingDates] = useState([]);
+  const [noteDates, setNoteDates] = useState([]);
+
+  // -------------------------------
+  // LOAD MEETINGS FOR SELECTED DATE
+  // -------------------------------
   useEffect(() => {
     async function loadMeetings() {
       try {
-        console.log("Fetching meetings for:", selectedDate);
-
         const res = await apiGet(`/meetings?date=${selectedDate}`);
-
-        console.log("API Response:", res);
-
-        // Backend returns:  [{ date:"2025-11-26", meetings:[ ... ] }]
-        if (Array.isArray(res) && res.length > 0) {
-          setMeetings(res[0].meetings || []);
-        } else {
-          setMeetings([]);
-        }
+        setMeetings(res.meetings || []);
       } catch (err) {
         console.error("Error loading meetings:", err);
       }
     }
 
-    if (selectedDate) loadMeetings();
+    loadMeetings();
   }, [selectedDate]);
 
-  // --------------------------
-  // 📝 Load notes for date
-  // --------------------------
+  // ------------------------------------
+  // LOAD MONTH MEETING + NOTE HIGHLIGHTS
+  // ------------------------------------
   useEffect(() => {
-    const key = `note_${selectedDate}`;
-    setNoteText(localStorage.getItem(key) || "");
+    async function loadMonthInfo() {
+      try {
+        const [year, month] = selectedDate.split("-");
+        const monthStr = `${year}-${month}`;
+
+        // --- Get meeting dates ---
+        const monthMeetings = await apiGet(`/meetings/month?month=${monthStr}`);
+        setMeetingDates(monthMeetings.dates || []);
+
+        // --- Get notes dates ---
+        const monthNotes = await apiGet(`/notes/month?month=${monthStr}`);
+        setNoteDates(monthNotes.dates || []);
+
+      } catch (err) {
+        console.error("Failed month load:", err);
+      }
+    }
+
+    loadMonthInfo();
   }, [selectedDate]);
 
-  // --------------------------
-  // 💾 Save Notes
-  // --------------------------
-  function saveNote() {
-    const key = `note_${selectedDate}`;
-    localStorage.setItem(key, noteText);
-    alert("✅ Notes saved!");
+  // -------------------------------
+  // LOAD NOTES FOR SELECTED DATE
+  // -------------------------------
+  useEffect(() => {
+    async function loadNotes() {
+      try {
+        const res = await apiGet(`/notes/by-date?date=${selectedDate}`);
+        setNoteText(res.note || "");
+      } catch (err) {
+        console.error("Cannot load note, using empty.", err);
+        setNoteText("");
+      }
+    }
+
+    loadNotes();
+  }, [selectedDate]);
+
+  // -------------------------------
+  // SAVE NOTE
+  // -------------------------------
+  async function saveNote() {
+    try {
+      await apiPost("/notes/create", {
+        date: selectedDate,
+        note: noteText,
+      });
+
+      alert("Notes saved!");
+
+      // refresh note dates highlight
+      const [year, month] = selectedDate.split("-");
+      const monthStr = `${year}-${month}`;
+      const monthNotes = await apiGet(`/notes/month?month=${monthStr}`);
+      setNoteDates(monthNotes.dates || []);
+
+    } catch (err) {
+      console.error("Note save failed", err);
+      alert("Error saving note");
+    }
   }
 
+  // -------------------------------
+  // UI
+  // -------------------------------
   return (
     <div
-      className="container"
       style={{
         minHeight: "100vh",
         background: "#F8F9FF",
@@ -66,7 +110,6 @@ export default function Dashboard() {
       }}
     >
       <div
-        className="meetings-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "1.2fr 1fr",
@@ -75,7 +118,7 @@ export default function Dashboard() {
           margin: "0 auto",
         }}
       >
-        {/* ====================== 🗓 CALENDAR ====================== */}
+        {/* LEFT - CALENDAR */}
         <div
           style={{
             background: "#fff",
@@ -84,20 +127,19 @@ export default function Dashboard() {
             padding: "1.5rem",
           }}
         >
-          <h2 style={{ marginBottom: "1rem", color: "#1E1E2F" }}>
-            Calendar
-          </h2>
+          <h2>Calendar</h2>
 
           <CalendarView
             selectedDate={selectedDate}
             onSelectDate={setSelectedDate}
+            meetingDates={meetingDates}
+            noteDates={noteDates}
           />
         </div>
 
-        {/* ====================== 📅 MEETINGS + NOTES ====================== */}
+        {/* RIGHT - MEETINGS + NOTES */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           <div
-            className="card"
             style={{
               background: "#fff",
               borderRadius: 16,
@@ -105,45 +147,31 @@ export default function Dashboard() {
               boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
             }}
           >
-            {/* Header */}
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
-                alignItems: "center",
+                marginBottom: "1rem",
               }}
             >
-              <div style={{ fontWeight: 600, color: "#1E1E2F" }}>
-                Meetings for {selectedDate}
-              </div>
-              <div style={{ color: "#606074", fontSize: "0.9rem" }}>
-                {meetings.length} meetings
-              </div>
+              <strong>Meetings for {selectedDate}</strong>
+              <span>{meetings.length} meetings</span>
             </div>
 
-            {/* Meeting List */}
-            <div className="mt-2" style={{ marginTop: "1rem" }}>
+            {/* Show real meetings */}
+            <div style={{ marginTop: "1rem" }}>
               {meetings.length > 0 ? (
                 meetings.map((m) => (
                   <div key={m.id} style={{ marginBottom: 10 }}>
-                    <MeetingCard
-                      meeting={{
-                        id: m.id,
-                        title: m.title,
-                        agenda: m.agenda,
-                        start: m.scheduled_start,
-                        end: m.scheduled_end,
-                        owner: m.owner_id,
-                      }}
-                    />
+                    <MeetingCard meeting={m} />
                   </div>
                 ))
               ) : (
-                <p style={{ color: "#999" }}>No meetings scheduled.</p>
+                <p style={{ color: "#888" }}>No meetings scheduled.</p>
               )}
             </div>
 
-            {/* ====================== 📝 NOTES ====================== */}
+            {/* NOTES SECTION */}
             <div
               style={{
                 marginTop: "1.5rem",
@@ -151,15 +179,7 @@ export default function Dashboard() {
                 borderTop: "1px solid #eee",
               }}
             >
-              <h3
-                style={{
-                  marginBottom: "0.5rem",
-                  color: "#1E1E2F",
-                  fontSize: "1.1rem",
-                }}
-              >
-                📝 Notes for {selectedDate}
-              </h3>
+              <h3>📝 Notes for {selectedDate}</h3>
 
               <textarea
                 value={noteText}
@@ -167,13 +187,11 @@ export default function Dashboard() {
                 placeholder="Write your notes..."
                 style={{
                   width: "100%",
-                  height: "160px",
+                  height: "150px",
                   padding: "1rem",
                   borderRadius: 12,
                   border: "1px solid #ccc",
                   resize: "none",
-                  fontSize: "1rem",
-                  outlineColor: "#6759FF",
                 }}
               />
 
@@ -184,9 +202,9 @@ export default function Dashboard() {
                   padding: "0.75rem",
                   width: "100%",
                   borderRadius: 12,
-                  border: "none",
                   background: "linear-gradient(135deg,#6759FF,#A79BFF)",
                   color: "#fff",
+                  border: "none",
                   fontWeight: 600,
                   cursor: "pointer",
                 }}
@@ -196,9 +214,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* ====================== ⚡ QUICK ACTIONS ====================== */}
+          {/* QUICK ACTIONS */}
           <div
-            className="card"
             style={{
               background: "#fff",
               borderRadius: 16,
@@ -206,10 +223,7 @@ export default function Dashboard() {
               boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
             }}
           >
-            <div style={{ fontWeight: 600, color: "#1E1E2F" }}>
-              Quick Actions
-            </div>
-
+            <strong>Quick Actions</strong>
             <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
               <ActionButton onClick={() => (window.location.href = "/instant")}>
                 Instant Meeting

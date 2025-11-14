@@ -1,34 +1,63 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { apiGet } from "../api";
 
 export default function MeetingCard({ meeting }) {
+  const [owner, setOwner] = useState(null);
+
+  useEffect(() => {
+    async function loadOwner() {
+      try {
+        const res = await apiGet(`/user/${meeting.owner_id}`);
+        setOwner(res);
+      } catch (err) {
+        console.error("Failed to load owner:", err);
+      }
+    }
+
+    if (meeting.owner_id) loadOwner();
+  }, [meeting.owner_id]);
+
   return (
     <div
       style={{
-        background: "#F8F9FF",
         padding: "1rem",
         borderRadius: 12,
         border: "1px solid #eee",
+        background: "#FAFAFF",
       }}
     >
-      <h3 style={{ margin: 0, color: "#1E1E2F" }}>{meeting.title}</h3>
+      {/* Title */}
+      <h3 style={{ margin: 0 }}>{meeting.title}</h3>
 
-      <p style={{ margin: "6px 0", color: "#606074" }}>
-        📄 <b>Agenda:</b> {meeting.agenda}
+      {/* Agenda */}
+      <p style={{ margin: "6px 0", color: "#555" }}>{meeting.agenda}</p>
+
+      {/* Date & Time */}
+      <p style={{ margin: "4px 0", fontSize: "0.9rem", color: "#6759FF" }}>
+        🕒 {meeting.scheduled_start.replace("T", " ")}
       </p>
 
-      <p style={{ margin: "6px 0", color: "#606074" }}>
-        🗓 <b>Date:</b> {new Date(meeting.start).toLocaleDateString()}
+      {/* Owner */}
+      <p style={{ margin: "4px 0", fontSize: "0.9rem", color: "#444" }}>
+        👤 Scheduled by:{" "}
+        <strong>{owner ? owner.name : "Loading..."}</strong>
       </p>
 
-      <p style={{ margin: "6px 0", color: "#606074" }}>
-        🕒 <b>Time:</b>{" "}
-        {new Date(meeting.start).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} –{" "}
-        {new Date(meeting.end).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-      </p>
-
-      <p style={{ margin: "6px 0", color: "#606074" }}>
-        👤 <b>Owner (User ID):</b> {meeting.owner}
-      </p>
+      {/* Meeting Link */}
+      {meeting.meeting_link && (
+        <a
+          href={meeting.meeting_link}
+          target="_blank"
+          style={{
+            marginTop: "6px",
+            display: "inline-block",
+            fontSize: "0.9rem",
+            color: "#6759FF",
+          }}
+        >
+          🔗 Join Meeting
+        </a>
+      )}
     </div>
   );
 }

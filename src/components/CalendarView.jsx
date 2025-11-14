@@ -1,10 +1,23 @@
 import React, { useState } from "react";
 
-export default function CalendarView({ selectedDate, onSelectDate }) {
+export default function CalendarView({
+  selectedDate,
+  onSelectDate,
+  meetingDates = [],
+  noteDates = []
+}) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  const monthStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-  const monthEnd = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+  const monthStart = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth(),
+    1
+  );
+  const monthEnd = new Date(
+    currentMonth.getFullYear(),
+    currentMonth.getMonth() + 1,
+    0
+  );
   const daysInMonth = monthEnd.getDate();
 
   const prevMonth = () =>
@@ -17,7 +30,6 @@ export default function CalendarView({ selectedDate, onSelectDate }) {
       new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
     );
 
-  // Convert date to YYYY-MM-DD (safe for backend)
   const formatDate = (date) => {
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -26,17 +38,14 @@ export default function CalendarView({ selectedDate, onSelectDate }) {
   };
 
   const days = [...Array(daysInMonth).keys()].map(
-    (d) => new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d + 1)
+    (d) =>
+      new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d + 1)
   );
 
-  const isSameDay = (d1, d2) => {
-    if (!d2) return false;
-    return (
-      d1.getFullYear() === d2.getFullYear() &&
-      d1.getMonth() === d2.getMonth() &&
-      d1.getDate() === d2.getDate()
-    );
-  };
+  const isSameDay = (d1, d2) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
 
   return (
     <div>
@@ -45,7 +54,6 @@ export default function CalendarView({ selectedDate, onSelectDate }) {
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
           marginBottom: "1rem",
         }}
       >
@@ -62,7 +70,7 @@ export default function CalendarView({ selectedDate, onSelectDate }) {
           ‹
         </button>
 
-        <div style={{ fontWeight: 600, color: "#1E1E2F" }}>
+        <div style={{ fontWeight: 600 }}>
           {currentMonth.toLocaleString("default", { month: "long" })}{" "}
           {currentMonth.getFullYear()}
         </div>
@@ -91,45 +99,72 @@ export default function CalendarView({ selectedDate, onSelectDate }) {
         }}
       >
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div
-            key={d}
-            style={{
-              fontWeight: 600,
-              color: "#606074",
-              fontSize: "0.85rem",
-            }}
-          >
+          <div key={d} style={{ fontWeight: 600, color: "#606074" }}>
             {d}
           </div>
         ))}
 
-        {days.map((day) => (
-          <div
-            key={day.toISOString()}
-            onClick={() => {
-              const formatted = formatDate(day); // 👉 always safe date string
-              onSelectDate(formatted);
-            }}
-            style={{
-              padding: "0.8rem 0",
-              borderRadius: "8px",
-              cursor: "pointer",
-              background:
-                selectedDate &&
-                isSameDay(day, new Date(selectedDate))
-                  ? "linear-gradient(135deg, #6759FF, #A79BFF)"
-                  : "#F8F9FF",
-              color:
-                selectedDate &&
-                isSameDay(day, new Date(selectedDate))
-                  ? "#fff"
-                  : "#1E1E2F",
-              transition: "all 0.2s ease",
-            }}
-          >
-            {day.getDate()}
-          </div>
-        ))}
+        {days.map((day) => {
+          const formatted = formatDate(day);
+
+          const hasMeeting = meetingDates.includes(formatted);
+          const hasNote = noteDates.includes(formatted);
+
+          return (
+            <div
+              key={formatted}
+              onClick={() => onSelectDate(formatted)}
+              style={{
+                padding: "0.8rem 0",
+                borderRadius: "8px",
+                cursor: "pointer",
+                background:
+                  selectedDate && isSameDay(day, new Date(selectedDate))
+                    ? "linear-gradient(135deg, #6759FF, #A79BFF)"
+                    : "#F8F9FF",
+                color:
+                  selectedDate && isSameDay(day, new Date(selectedDate))
+                    ? "#fff"
+                    : "#1E1E2F",
+                transition: "0.2s",
+              }}
+            >
+              {day.getDate()}
+
+              {/* Indicators */}
+              <div
+                style={{
+                  marginTop: "4px",
+                  display: "flex",
+                  justifyContent: "center",
+                  gap: "4px",
+                }}
+              >
+                {hasMeeting && (
+                  <div
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: "#6759FF",
+                    }}
+                  />
+                )}
+
+                {hasNote && (
+                  <div
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: "#F7C948",
+                    }}
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
