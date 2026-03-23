@@ -1,12 +1,24 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import CalendarView from "../components/CalendarView";
 import MeetingCard from "../components/MeetingCard";
 import ActionButton from "../components/ActionButton";
-import { apiGet } from "../api";
+import { apiGet, apiPost } from "../api";
+import { useDarkMode } from "../context/DarkModeContext";
 
 export default function Dashboard() {
+  const nav = useNavigate();
+  const { darkMode } = useDarkMode();
   const today = new Date().toISOString().split("T")[0];
   const [selectedDate, setSelectedDate] = useState(today);
+
+  // Check authentication
+  useEffect(() => {
+    if (!localStorage.getItem("token")) {
+      nav("/login");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [meetings, setMeetings] = useState([]);
   const [noteText, setNoteText] = useState("");
@@ -14,6 +26,11 @@ export default function Dashboard() {
   // NEW STATES FOR HIGHLIGHTING DATES
   const [meetingDates, setMeetingDates] = useState([]);
   const [noteDates, setNoteDates] = useState([]);
+
+  // Delete meeting handler
+  const handleDeleteMeeting = (deletedId) => {
+    setMeetings(prev => prev.filter(m => m.id !== deletedId));
+  };
 
   // -------------------------------
   // LOAD MEETINGS FOR SELECTED DATE
@@ -63,7 +80,8 @@ export default function Dashboard() {
     async function loadNotes() {
       try {
         const res = await apiGet(`/notes/by-date?date=${selectedDate}`);
-        setNoteText(res.note || "");
+        const notes = res.notes || [];
+        setNoteText(notes.length > 0 ? notes[0].note_text : "");
       } catch (err) {
         console.error("Cannot load note, using empty.", err);
         setNoteText("");
@@ -79,8 +97,8 @@ export default function Dashboard() {
   async function saveNote() {
     try {
       await apiPost("/notes/create", {
-        date: selectedDate,
-        note: noteText,
+        note_date: selectedDate,
+        note_text: noteText,
       });
 
       alert("Notes saved!");
@@ -100,34 +118,44 @@ export default function Dashboard() {
   // -------------------------------
   // UI
   // -------------------------------
+  const cardBg = darkMode ? "#16213e" : "#fff";
+  const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
+  const mutedColor = darkMode ? "#888" : "#888";
+  const borderColor = darkMode ? "#333" : "#eee";
+
   return (
     <div
       style={{
-        minHeight: "100vh",
-        background: "#F8F9FF",
+        minHeight: "calc(100vh - 60px)",
+        background: darkMode ? "#1a1a2e" : "#F8F9FF",
         paddingTop: "6rem",
         paddingBottom: "2rem",
+        paddingLeft: "1rem",
+        paddingRight: "1rem",
+        width: "100%",
       }}
     >
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1.2fr 1fr",
+          gridTemplateColumns: "1fr 1fr",
           gap: "2rem",
-          maxWidth: "1200px",
+          maxWidth: "1400px",
           margin: "0 auto",
+          width: "100%",
         }}
       >
         {/* LEFT - CALENDAR */}
         <div
           style={{
-            background: "#fff",
+            background: cardBg,
             borderRadius: 16,
             boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
             padding: "1.5rem",
+            color: textColor,
           }}
         >
-          <h2>Calendar</h2>
+          <h2 style={{ color: textColor }}>Calendar</h2>
 
           <CalendarView
             selectedDate={selectedDate}
@@ -141,10 +169,11 @@ export default function Dashboard() {
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           <div
             style={{
-              background: "#fff",
+              background: cardBg,
               borderRadius: 16,
               padding: "1.5rem",
               boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+              color: textColor,
             }}
           >
             <div
@@ -154,8 +183,8 @@ export default function Dashboard() {
                 marginBottom: "1rem",
               }}
             >
-              <strong>Meetings for {selectedDate}</strong>
-              <span>{meetings.length} meetings</span>
+              <strong style={{ color: textColor }}>Meetings for {selectedDate}</strong>
+              <span style={{ color: mutedColor }}>{meetings.length} meetings</span>
             </div>
 
             {/* Show real meetings */}
@@ -163,11 +192,11 @@ export default function Dashboard() {
               {meetings.length > 0 ? (
                 meetings.map((m) => (
                   <div key={m.id} style={{ marginBottom: 10 }}>
-                    <MeetingCard meeting={m} />
+                    <MeetingCard meeting={m} onDelete={handleDeleteMeeting} />
                   </div>
                 ))
               ) : (
-                <p style={{ color: "#888" }}>No meetings scheduled.</p>
+                <p style={{ color: mutedColor }}>No meetings scheduled.</p>
               )}
             </div>
 
@@ -176,10 +205,10 @@ export default function Dashboard() {
               style={{
                 marginTop: "1.5rem",
                 paddingTop: "1.2rem",
-                borderTop: "1px solid #eee",
+                borderTop: `1px solid ${borderColor}`,
               }}
             >
-              <h3>📝 Notes for {selectedDate}</h3>
+              <h3 style={{ color: textColor }}>📝 Notes for {selectedDate}</h3>
 
               <textarea
                 value={noteText}
@@ -190,8 +219,10 @@ export default function Dashboard() {
                   height: "150px",
                   padding: "1rem",
                   borderRadius: 12,
-                  border: "1px solid #ccc",
+                  border: `1px solid ${borderColor}`,
                   resize: "none",
+                  background: darkMode ? "#0f0f23" : "#fff",
+                  color: textColor,
                 }}
               />
 
@@ -217,13 +248,13 @@ export default function Dashboard() {
           {/* QUICK ACTIONS */}
           <div
             style={{
-              background: "#fff",
+              background: cardBg,
               borderRadius: 16,
               padding: "1.5rem",
               boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
             }}
           >
-            <strong>Quick Actions</strong>
+            <strong style={{ color: textColor }}>Quick Actions</strong>
             <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
               <ActionButton onClick={() => (window.location.href = "/instant")}>
                 Instant Meeting

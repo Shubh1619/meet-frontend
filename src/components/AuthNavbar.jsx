@@ -167,9 +167,13 @@ export default function AuthNavbar() {
             <p style={{ margin: 0, color: "#606074" }}>{user.email}</p>
           </div>
 
-          {/* Open full profile page */}
+          {/* Open full profile page - DISABLED during meeting */}
           <button
             onClick={() => {
+              // Check if in meeting - if so, don't navigate
+              if (window.location.pathname.includes("/meeting/")) {
+                return; // Don't navigate to profile during meeting
+              }
               setOpenProfile(false);
               nav("/profile");
             }}
@@ -184,6 +188,7 @@ export default function AuthNavbar() {
               cursor: "pointer",
               marginBottom: "1rem",
             }}
+            title="Profile page disabled during meeting"
           >
             Open Profile Page
           </button>

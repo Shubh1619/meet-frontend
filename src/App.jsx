@@ -12,40 +12,36 @@ import ScheduleMeeting from "./pages/ScheduleMeeting";
 import InstantMeeting from "./pages/InstantMeeting";
 import JoinMeeting from "./pages/JoinMeeting";
 import MeetingRoom from "./pages/MeetingRoom";
-import Profile from "./pages/Profile";  // ✅ ADD THIS
+import Profile from "./pages/Profile";
 
-
-// -------------------------
-// AUTH PROTECTED ROUTE
-// -------------------------
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem("token");
   if (!token) return <Navigate to="/login" replace />;
   return children;
 }
 
-// -------------------------
-// MAIN APP
-// -------------------------
 export default function App() {
   const location = useLocation();
   const token = localStorage.getItem("token");
 
-  // Public routes
   const publicRoutes = ["/", "/login", "/register"];
+  const isMeetingRoom = location.pathname.startsWith("/meeting/");
 
-  const usePublicNavbar = publicRoutes.includes(location.pathname) || !token;
+  const usePublicNavbar = publicRoutes.includes(location.pathname) || !token || isMeetingRoom;
 
   return (
     <div className="app-container">
       {usePublicNavbar ? <PublicNavbar /> : <AuthNavbar />}
 
-      <main style={{ flex: 1 }}>
+      <main className="main-content">
         <Routes>
           {/* Public */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+
+          {/* Meeting Room - PUBLIC (no login required) */}
+          <Route path="/meeting/:roomId" element={<MeetingRoom />} />
 
           {/* Protected */}
           <Route
@@ -84,16 +80,7 @@ export default function App() {
             }
           />
 
-          <Route
-            path="/meeting/:roomId"
-            element={
-              <ProtectedRoute>
-                <MeetingRoom />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* ✅ ADD PROFILE PAGE ROUTE */}
+          {/* Profile Page Route */}
           <Route
             path="/profile"
             element={

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useDarkMode } from "../context/DarkModeContext";
 
 export default function CalendarView({
   selectedDate,
@@ -6,13 +7,9 @@ export default function CalendarView({
   meetingDates = [],
   noteDates = []
 }) {
+  const { darkMode } = useDarkMode();
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  const monthStart = new Date(
-    currentMonth.getFullYear(),
-    currentMonth.getMonth(),
-    1
-  );
   const monthEnd = new Date(
     currentMonth.getFullYear(),
     currentMonth.getMonth() + 1,
@@ -47,6 +44,10 @@ export default function CalendarView({
     d1.getMonth() === d2.getMonth() &&
     d1.getDate() === d2.getDate();
 
+  const dayBg = darkMode ? "#0f0f23" : "#F8F9FF";
+  const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
+  const mutedColor = darkMode ? "#666" : "#606074";
+
   return (
     <div>
       {/* Header */}
@@ -70,7 +71,7 @@ export default function CalendarView({
           ‹
         </button>
 
-        <div style={{ fontWeight: 600 }}>
+        <div style={{ fontWeight: 600, color: textColor }}>
           {currentMonth.toLocaleString("default", { month: "long" })}{" "}
           {currentMonth.getFullYear()}
         </div>
@@ -99,7 +100,7 @@ export default function CalendarView({
         }}
       >
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-          <div key={d} style={{ fontWeight: 600, color: "#606074" }}>
+          <div key={d} style={{ fontWeight: 600, color: mutedColor }}>
             {d}
           </div>
         ))}
@@ -121,11 +122,11 @@ export default function CalendarView({
                 background:
                   selectedDate && isSameDay(day, new Date(selectedDate))
                     ? "linear-gradient(135deg, #6759FF, #A79BFF)"
-                    : "#F8F9FF",
+                    : dayBg,
                 color:
                   selectedDate && isSameDay(day, new Date(selectedDate))
                     ? "#fff"
-                    : "#1E1E2F",
+                    : textColor,
                 transition: "0.2s",
               }}
             >

@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
+import { useDarkMode } from "../context/DarkModeContext";
 
 export default function Register() {
+  const { darkMode } = useDarkMode();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
@@ -11,11 +13,17 @@ export default function Register() {
 
   const nav = useNavigate();
 
-  // 🚀 If already logged in → redirect to dashboard
+  const cardBg = darkMode ? "#16213e" : "#fff";
+  const bgColor = darkMode ? "#1a1a2e" : "#F8F9FF";
+  const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
+  const mutedColor = darkMode ? "#888" : "#606074";
+
+  // If already logged in → redirect to dashboard
   useEffect(() => {
     if (localStorage.getItem("token")) {
-      nav("/register");
+      nav("/dashboard");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function submit(e) {
@@ -64,6 +72,21 @@ export default function Register() {
       // Save token
       localStorage.setItem("token", loginData.access_token);
 
+      // Fetch user info and save to localStorage
+      try {
+        const userRes = await fetch(`${import.meta.env.VITE_API_URL}/auth/user`, {
+          headers: {
+            Authorization: `Bearer ${loginData.access_token}`,
+          },
+        });
+        if (userRes.ok) {
+          const userData = await userRes.json();
+          localStorage.setItem("user", JSON.stringify(userData));
+        }
+      } catch (e) {
+        console.error("Failed to fetch user info:", e);
+      }
+
       nav("/dashboard");
     } catch (error) {
       setErr(error.message);
@@ -75,19 +98,20 @@ export default function Register() {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        background: "#F8F9FF",
+        minHeight: "calc(100vh - 60px)",
+        background: bgColor,
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        paddingTop: "6rem",
+        paddingTop: "5rem",
+        width: "100%",
       }}
     >
       <div
         style={{
           maxWidth: 420,
           width: "100%",
-          background: "#fff",
+          background: cardBg,
           borderRadius: 16,
           padding: "2.5rem 2rem",
           boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
@@ -125,7 +149,7 @@ export default function Register() {
           </div>
         </div>
 
-        <h2 style={{ marginBottom: "0.5rem", color: "#1E1E2F" }}>
+        <h2 style={{ marginBottom: "0.5rem", color: textColor }}>
           Create Your Account ✨
         </h2>
 
@@ -144,29 +168,32 @@ export default function Register() {
         )}
 
         <form onSubmit={submit} style={{ textAlign: "left" }}>
-          <label className="small-muted">Name</label>
+          <label className="small-muted" style={{ color: mutedColor }}>Name</label>
           <input
             className="input mt-1"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: darkMode ? "#333" : "#ddd" }}
           />
 
-          <label className="small-muted mt-1">Email</label>
+          <label className="small-muted mt-1" style={{ color: mutedColor }}>Email</label>
           <input
             className="input mt-1"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: darkMode ? "#333" : "#ddd" }}
           />
 
-          <label className="small-muted mt-1">Password</label>
+          <label className="small-muted mt-1" style={{ color: mutedColor }}>Password</label>
           <input
             type="password"
             className="input mt-1"
             value={pass}
             onChange={(e) => setPass(e.target.value)}
             required
+            style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: darkMode ? "#333" : "#ddd" }}
           />
 
           <div style={{ marginTop: "1.5rem" }}>
@@ -176,7 +203,7 @@ export default function Register() {
           </div>
         </form>
 
-        <p style={{ marginTop: "1rem", fontSize: "0.9rem", color: "#606074" }}>
+        <p style={{ marginTop: "1rem", fontSize: "0.9rem", color: mutedColor }}>
           Already have an account?{" "}
           <span
             style={{ color: "#6759FF", fontWeight: 600, cursor: "pointer" }}

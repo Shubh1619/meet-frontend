@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   TextField,
   ThemeProvider,
@@ -10,6 +10,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DatePicker, TimePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
+import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { apiPost } from "../api";
 
@@ -23,6 +24,16 @@ const theme = createTheme({
 });
 
 export default function ScheduleMeeting() {
+  const navigate = useNavigate();
+
+  // Auth check
+  useEffect(() => {
+    if (!localStorage.getItem("token")) {
+      navigate("/login");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [topic, setTopic] = useState("");
   const [agenda, setAgenda] = useState("");
   const [participants, setParticipants] = useState("");
@@ -34,22 +45,35 @@ export default function ScheduleMeeting() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Combine date and time into a single dayjs object
+    // Use local timezone (no UTC conversion)
+    const combineDateTime = (dateVal, timeVal) => {
+      const combined = dayjs(dateVal.format("YYYY-MM-DD")).hour(timeVal.hour()).minute(timeVal.minute()).second(0);
+      return combined.format("YYYY-MM-DDTHH:mm:ss");
+    };
+
     const payload = {
       title: topic,
       agenda,
-      start_time: startTime.toISOString().replace("Z", ""), // FIXED
-      end_time: endTime.toISOString().replace("Z", ""),     // FIXED
+      start_time: combineDateTime(date, startTime),
+      end_time: combineDateTime(date, endTime),
       participants: participants
         ? participants.split(",").map((p) => p.trim()).filter(Boolean)
         : [],
     };
 
-    console.log("📅 Sending:", payload);
+    // Debug logging
+    console.log("📅 Date selected:", date.format("YYYY-MM-DD"));
+    console.log("📅 Start time:", startTime.format("HH:mm"));
+    console.log("📅 Combined start:", payload.start_time);
+    console.log("📅 System timezone offset:", new Date().getTimezoneOffset());
+    console.log("📅 Sending payload:", payload);
 
     try {
       const res = await apiPost("/schedule", payload);
       alert("✅ Meeting scheduled successfully!");
-      console.log(res);
+      console.log("📅 Backend response:", res);
+      navigate("/dashboard");
     } catch (err) {
       alert("❌ Failed to schedule meeting");
       console.error(err);

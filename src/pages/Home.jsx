@@ -1,13 +1,21 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
+import { useDarkMode } from "../context/DarkModeContext";
 
 export default function Home() {
   const nav = useNavigate();
+  const { darkMode } = useDarkMode();
+
+  const bgColor = darkMode ? "#1a1a2e" : "#F8F9FF";
+  const cardBg = darkMode ? "#16213e" : "#fff";
+  const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
+  const mutedColor = darkMode ? "#888" : "#606074";
+  const sectionBg = darkMode ? "#0f0f23" : "#fff";
 
   return (
-    <div style={{ width: "100%", backgroundColor: "#F8F9FF", color: "#1E1E2F" }}>
-      {/* 🌐 Fixed Navbar */}
+    <div style={{ width: "100%", backgroundColor: bgColor, color: textColor }}>
+      {/* Fixed Navbar */}
       <header
         style={{
           width: "100%",
@@ -15,7 +23,7 @@ export default function Home() {
           top: 0,
           left: 0,
           height: "64px",
-          background: "#fff",
+          background: cardBg,
           boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
           zIndex: 100,
           padding: "0.75rem 2rem",
@@ -62,14 +70,14 @@ export default function Home() {
             alignItems: "center",
             gap: "1.25rem",
             fontWeight: 500,
-            color: "#606074",
+            color: mutedColor,
           }}
         >
-          <a href="#home" className="tab active">Home</a>
-          <a href="#features" className="tab">Features</a>
-          <a href="#workflow" className="tab">Workflow</a>
-          <a href="#pricing" className="tab">Pricing</a>
-          <a href="#contact" className="tab">Contact</a>
+          <a href="#home" className="tab active" style={{ color: mutedColor }}>Home</a>
+          <a href="#features" className="tab" style={{ color: mutedColor }}>Features</a>
+          <a href="#workflow" className="tab" style={{ color: mutedColor }}>Workflow</a>
+          <a href="#pricing" className="tab" style={{ color: mutedColor }}>Pricing</a>
+          <a href="#contact" className="tab" style={{ color: mutedColor }}>Contact</a>
         </nav>
 
         {/* Right: CTA Buttons */}
@@ -93,7 +101,7 @@ export default function Home() {
         }}
       >
 
-        {/* 🎯 Hero Section */}
+        {/* Hero Section */}
         <section
           id="home"
           style={{
@@ -108,13 +116,13 @@ export default function Home() {
         >
           {/* Left */}
           <div style={{ textAlign: "left" }}>
-            <h1 style={{ fontSize: "2.5rem", color: "#1E1E2F", lineHeight: 1.3 }}>
+            <h1 style={{ fontSize: "2.5rem", color: textColor, lineHeight: 1.3 }}>
               Make Meetings Smarter with{" "}
               <span style={{ color: "#6759FF" }}>Meetify 🚀</span>
             </h1>
             <p
               style={{
-                color: "#606074",
+                color: mutedColor,
                 fontSize: "1.1rem",
                 marginTop: "1rem",
                 lineHeight: 1.6,
@@ -136,7 +144,7 @@ export default function Home() {
             style={{
               height: 320,
               borderRadius: "16px",
-              background: "linear-gradient(135deg, #A79BFF, #F8F9FF)",
+              background: darkMode ? "linear-gradient(135deg, #16213e, #1a1a2e)" : "linear-gradient(135deg, #A79BFF, #F8F9FF)",
               boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
               display: "flex",
               alignItems: "center",
@@ -150,16 +158,16 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 🧩 Key Features */}
+        {/* Key Features */}
         <section
           id="features"
           style={{
-            background: "#fff",
+            background: sectionBg,
             width: "100%",
             padding: "4rem 1rem",
           }}
         >
-          <h2 style={{ textAlign: "center", color: "#1E1E2F" }}>Key Features</h2>
+          <h2 style={{ textAlign: "center", color: textColor }}>Key Features</h2>
           <div
             style={{
               display: "grid",
@@ -179,23 +187,24 @@ export default function Home() {
               <div
                 key={i}
                 style={{
-                  background: "#F8F9FF",
+                  background: darkMode ? "#1a1a2e" : "#F8F9FF",
                   borderRadius: 16,
                   textAlign: "center",
                   padding: "2rem 1rem",
                   transition: "all 0.3s ease",
                   boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+                  color: textColor,
                 }}
               >
                 <div style={{ fontSize: "2rem" }}>{f.icon}</div>
-                <h3 style={{ margin: "1rem 0 0.5rem" }}>{f.title}</h3>
-                <p style={{ color: "#606074" }}>{f.text}</p>
+                <h3 style={{ margin: "1rem 0 0.5rem", color: textColor }}>{f.title}</h3>
+                <p style={{ color: mutedColor }}>{f.text}</p>
               </div>
             ))}
           </div>
         </section>
 
-        {/* ⚙️ How It Works */}
+        {/* How It Works */}
         <section
           id="workflow"
           style={{
@@ -206,7 +215,7 @@ export default function Home() {
             textAlign: "center",
           }}
         >
-          <h2>How It Works</h2>
+          <h2 style={{ color: textColor }}>How It Works</h2>
           <div
             style={{
               display: "flex",
@@ -226,13 +235,14 @@ export default function Home() {
                 style={{
                   width: 240,
                   padding: "1.5rem",
-                  background: "#fff",
+                  background: cardBg,
                   borderRadius: 16,
                   boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
+                  color: textColor,
                 }}
               >
                 <div style={{ fontSize: "2rem" }}>{s.step}</div>
-                <p style={{ fontWeight: 500, color: "#1E1E2F", marginTop: "0.5rem" }}>
+                <p style={{ fontWeight: 500, color: textColor, marginTop: "0.5rem" }}>
                   {s.text}
                 </p>
               </div>
@@ -240,16 +250,16 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 💼 Why Choose Meetify */}
+        {/* Why Choose Meetify */}
         <section
           style={{
-            background: "#F8F9FF",
+            background: sectionBg,
             width: "100%",
             padding: "4rem 1rem",
             textAlign: "center",
           }}
         >
-          <h2>Why Choose Meetify?</h2>
+          <h2 style={{ color: textColor }}>Why Choose Meetify?</h2>
           <div
             style={{
               display: "flex",
@@ -270,8 +280,9 @@ export default function Home() {
                   width: 260,
                   padding: "1.5rem",
                   borderRadius: 16,
-                  background: "#fff",
+                  background: cardBg,
                   boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
+                  color: textColor,
                 }}
               >
                 {txt}
@@ -280,22 +291,22 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 💸 Pricing Section */}
+        {/* Pricing Section */}
         <section
           id="pricing"
           style={{
             width: "100%",
             padding: "4rem 1rem",
-            background: "#fff",
+            background: sectionBg,
             textAlign: "center",
           }}
         >
-          <h2 style={{ fontSize: "2rem", marginBottom: "0.5rem", color: "#1E1E2F" }}>
+          <h2 style={{ fontSize: "2rem", marginBottom: "0.5rem", color: textColor }}>
             Simple, Transparent Pricing
           </h2>
           <p
             style={{
-              color: "#606074",
+              color: mutedColor,
               fontSize: "1rem",
               margin: "0 auto 2.5rem",
               maxWidth: 550,
@@ -347,10 +358,10 @@ export default function Home() {
                   borderRadius: "16px",
                   border: p.highlighted
                     ? "2px solid #6759FF"
-                    : "1px solid rgba(0,0,0,0.08)",
+                    : `1px solid ${darkMode ? "#333" : "rgba(0,0,0,0.08)"}`,
                   background: p.highlighted
-                    ? "linear-gradient(135deg, #F8F9FF, #FFFFFF)"
-                    : "#fff",
+                    ? (darkMode ? "#16213e" : "linear-gradient(135deg, #F8F9FF, #FFFFFF)")
+                    : cardBg,
                   boxShadow: p.highlighted
                     ? "0 10px 30px rgba(0,0,0,0.08)"
                     : "0 4px 16px rgba(0,0,0,0.05)",
@@ -359,6 +370,7 @@ export default function Home() {
                   justifyContent: "space-between",
                   transition: "transform 0.2s ease, box-shadow 0.3s ease",
                   height: "100%",
+                  color: textColor,
                 }}
               >
                 {p.highlighted && (
@@ -395,16 +407,17 @@ export default function Home() {
                       fontSize: "2.5rem",
                       fontWeight: "bold",
                       marginBottom: "0.25rem",
+                      color: textColor,
                     }}
                   >
                     {p.price}
                   </div>
-                  <div style={{ color: "#606074", marginBottom: "1rem" }}>
+                  <div style={{ color: mutedColor, marginBottom: "1rem" }}>
                     {p.period}
                   </div>
                   <p
                     style={{
-                      color: "#606074",
+                      color: mutedColor,
                       marginBottom: "1.25rem",
                       fontSize: "0.95rem",
                       lineHeight: 1.5,
@@ -429,7 +442,7 @@ export default function Home() {
                         alignItems: "center",
                         gap: "0.5rem",
                         marginBottom: "0.6rem",
-                        color: "#606074",
+                        color: mutedColor,
                         fontSize: "0.95rem",
                       }}
                     >
@@ -457,22 +470,23 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 💌 Footer */}
+        {/* Footer */}
         <footer
           id="contact"
           style={{
-            background: "#F8F9FF",
+            background: sectionBg,
             width: "100%",
             padding: "1.5rem 1rem",
             textAlign: "center",
-            borderTop: "1px solid rgba(0,0,0,0.05)",
+            borderTop: `1px solid ${darkMode ? "#333" : "rgba(0,0,0,0.05)"}`,
             marginTop: "1rem",
+            color: textColor,
           }}
         >
           <p style={{ margin: 0 }}>
             © {new Date().getFullYear()} Meetify. All rights reserved.
           </p>
-          <p style={{ color: "#606074", fontSize: "0.9rem", marginTop: "0.3rem" }}>
+          <p style={{ color: mutedColor, fontSize: "0.9rem", marginTop: "0.3rem" }}>
             <a href="#home">Home</a> • <a href="#features">Features</a> •{" "}
             <a href="#pricing">Pricing</a> • <a href="#contact">Support</a>
           </p>

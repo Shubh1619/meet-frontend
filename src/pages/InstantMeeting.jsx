@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { apiPost } from "../api";
+import { useDarkMode } from "../context/DarkModeContext";
 
 export default function InstantMeeting() {
+  const { darkMode } = useDarkMode();
   const [title, setTitle] = useState("");
   const [agenda, setAgenda] = useState("");
   const [participants, setParticipants] = useState("");
@@ -11,6 +13,21 @@ export default function InstantMeeting() {
   const [loading, setLoading] = useState(false);
 
   const nav = useNavigate();
+
+  // Auth check
+  useEffect(() => {
+    if (!localStorage.getItem("token")) {
+      nav("/login");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const cardBg = darkMode ? "#16213e" : "#fff";
+  const bgColor = darkMode ? "#1a1a2e" : "#F8F9FF";
+  const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
+  const mutedColor = darkMode ? "#888" : "#606074";
+  const borderColor = darkMode ? "#333" : "#ddd";
+  const inputBg = darkMode ? "#0f0f23" : "#fff";
 
   async function createInstant(e) {
     e.preventDefault();
@@ -51,26 +68,30 @@ export default function InstantMeeting() {
   function joinMeeting() {
     if (!meetingLink) return;
 
-    // Extract the path after domain
-    const urlObj = new URL(meetingLink);
-    const roomId = urlObj.searchParams.get("room");
-    nav(`/meeting/${roomId}`);
+    // Extract room ID from URL path: /meeting/{roomId}
+    const match = meetingLink.match(/\/meeting\/([^/]+)/);
+    if (match) {
+      nav(`/meeting/${match[1]}`);
+    }
   }
 
   return (
     <div
       style={{
-        minHeight: "100vh",
-        background: "#F8F9FF",
+        minHeight: "calc(100vh - 60px)",
+        background: bgColor,
         display: "flex",
         justifyContent: "center",
         alignItems: "flex-start",
-        paddingTop: "6rem",
+        paddingTop: "5rem",
+        width: "100%",
+        paddingLeft: "1rem",
+        paddingRight: "1rem",
       }}
     >
       <div
         style={{
-          background: "#fff",
+          background: cardBg,
           borderRadius: 16,
           padding: "3rem 2.5rem",
           maxWidth: 520,
@@ -113,16 +134,16 @@ export default function InstantMeeting() {
         {/* BEFORE MEETING CREATION */}
         {!meetingLink ? (
           <>
-            <h2 style={{ color: "#1E1E2F", marginBottom: "0.5rem" }}>
+            <h2 style={{ color: textColor, marginBottom: "0.5rem" }}>
               Create Instant Meeting ⚡
             </h2>
-            <p style={{ color: "#606074", marginBottom: "2rem" }}>
+            <p style={{ color: mutedColor, marginBottom: "2rem" }}>
               Quickly launch a meeting link and share it instantly!
             </p>
 
             <form onSubmit={createInstant} style={{ textAlign: "left" }}>
               {/* Title */}
-              <label style={{ fontSize: "0.9rem", color: "#606074" }}>
+              <label style={{ fontSize: "0.9rem", color: mutedColor }}>
                 Title
               </label>
               <input
@@ -130,12 +151,12 @@ export default function InstantMeeting() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Team Sync"
-                style={inputStyle}
+                style={{ ...inputStyle, background: inputBg, color: textColor, borderColor }}
                 required
               />
 
               {/* Agenda */}
-              <label style={{ fontSize: "0.9rem", color: "#606074" }}>
+              <label style={{ fontSize: "0.9rem", color: mutedColor }}>
                 Agenda
               </label>
               <textarea
@@ -146,20 +167,23 @@ export default function InstantMeeting() {
                   ...inputStyle,
                   height: "90px",
                   resize: "none",
+                  background: inputBg,
+                  color: textColor,
+                  borderColor,
                 }}
                 required
               ></textarea>
 
               {/* Participants (Optional) */}
-              <label style={{ fontSize: "0.9rem", color: "#606074" }}>
-                Participants <span style={{ color: "#999" }}>(optional)</span>
+              <label style={{ fontSize: "0.9rem", color: mutedColor }}>
+                Participants <span style={{ color: darkMode ? "#666" : "#999" }}>(optional)</span>
               </label>
               <input
                 type="text"
                 value={participants}
                 onChange={(e) => setParticipants(e.target.value)}
                 placeholder="Enter emails separated by commas"
-                style={inputStyle}
+                style={{ ...inputStyle, background: inputBg, color: textColor, borderColor }}
               />
 
               <ActionButton
@@ -173,21 +197,22 @@ export default function InstantMeeting() {
         ) : (
           <>
             {/* AFTER MEETING CREATED */}
-            <h2 style={{ color: "#1E1E2F", marginBottom: "1rem" }}>
+            <h2 style={{ color: textColor, marginBottom: "1rem" }}>
               Meeting Created 🎉
             </h2>
-            <p style={{ color: "#606074", marginBottom: "1.2rem" }}>
+            <p style={{ color: mutedColor, marginBottom: "1.2rem" }}>
               Share this link with participants:
             </p>
 
             {/* Display Link */}
-            <div style={linkBoxStyle}>
+            <div style={{ ...linkBoxStyle, background: darkMode ? "#0f0f23" : "#F8F9FF" }}>
               <span
                 style={{
                   flex: 1,
                   whiteSpace: "nowrap",
                   overflow: "hidden",
                   textOverflow: "ellipsis",
+                  color: textColor,
                 }}
               >
                 {meetingLink}
