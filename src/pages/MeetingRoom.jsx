@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDarkMode } from "../context/DarkModeContext";
 import {
@@ -41,7 +41,6 @@ export default function MeetingRoom() {
 
   const peersRef = useRef({});
   const socketRef = useRef(null);
-  const peersVideoRefs = useRef({});
 
   const isMicOnRef = useRef(isMicOn);
   const isSpeakingRef = useRef(false);
@@ -275,20 +274,27 @@ export default function MeetingRoom() {
     };
   }, [isJoined]);
 
-  const handleSignalingData = (data) => {
+  const handleSignalingData = useCallback((data) => {
     const { type, from, ...payload } = data;
 
     switch (type) {
       case 'join':
-        createPeerConnection(from, true);
+        if (from === (guestName || storedUser?.name || 'Anonymous')) {
+          break;
+        }
+        if (!peersRef.current[from]) {
+          createPeerConnection(from, true);
+        }
         break;
       case 'offer':
-        createPeerConnection(from, false);
-        peersRef.current[from].setRemoteDescription(new RTCSessionDescription(payload));
+        if (!peersRef.current[from]) {
+          createPeerConnection(from, false);
+        }
+        peersRef.current[from]?.setRemoteDescription(new RTCSessionDescription(payload));
         createAnswer(from);
         break;
       case 'answer':
-        peersRef.current[from].setRemoteDescription(new RTCSessionDescription(payload));
+        peersRef.current[from]?.setRemoteDescription(new RTCSessionDescription(payload));
         break;
       case 'ice-candidate':
         if (peersRef.current[from]) {
@@ -298,65 +304,97 @@ export default function MeetingRoom() {
       default:
         break;
     }
-  };
+  }, [guestName, storedUser]);
 
   // WebRTC signaling and peer connections
   useEffect(() => {
     if (!roomId) return;
 
-    const socket = new WebSocket(`ws://localhost:8000/ws/${roomId}`);
-    socketRef.current = socket;
+    let socket = null;
+    let retryCount = 0;
+    const maxRetries = 6;
+    let retryTimeout = null;
 
-    socket.onopen = () => {
-      console.log('Connected to signaling server');
-      
-      // If logged-in user, notify server as host
-      if (token && storedUser?.name) {
-        socket.send(JSON.stringify({
-          type: 'host-join',
-          from: storedUser.name
-        }));
-        setIsJoined(true);
+    const buildWsUrl = () => {
+      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+      const host = window.location.host || 'localhost:8000';
+      // If running in local development and host is not backend, default to localhost:8000
+      if (host.includes('localhost') || host.includes('127.0.0.1')) {
+        return `${protocol}://localhost:8000/ws/${roomId}`;
       }
+      return `${protocol}://${host}/ws/${roomId}`;
     };
 
-    socket.onmessage = (message) => {
-      const data = JSON.parse(message.data);
-      
-      if (data.type === 'waiting-room-request') {
-        setWaitingRoomUsers(prev => {
-          if (prev.find(u => u.name === data.user.name)) return prev;
-          return [...prev, data.user];
-        });
-        return;
-      }
-      
-      if (data.type === 'waiting-room-response') {
-        handleWaitingRoomResponse(data);
-        return;
-      }
+    const connect = () => {
+      const wsUrl = buildWsUrl();
+      console.log('WebSocket connecting to', wsUrl);
+      socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
 
-      if (data.type === 'host-join') {
-        setIsInWaitingRoom(false);
-        setIsJoined(true);
-        return;
-      }
-      
-      handleSignalingData(data);
+      socket.onopen = () => {
+        console.log('Connected to signaling server');
+        retryCount = 0;
+
+        if (token && storedUser?.name) {
+          socket.send(JSON.stringify({
+            type: 'host-join',
+            from: storedUser.name
+          }));
+          setIsJoined(true);
+        }
+      };
+
+      socket.onmessage = (message) => {
+        const data = JSON.parse(message.data);
+
+        if (data.type === 'waiting-room-request') {
+          setWaitingRoomUsers(prev => {
+            if (prev.find(u => u.name === data.user.name)) return prev;
+            return [...prev, data.user];
+          });
+          return;
+        }
+
+        if (data.type === 'waiting-room-response') {
+          handleWaitingRoomResponse(data);
+          return;
+        }
+
+        if (data.type === 'host-join') {
+          setIsInWaitingRoom(false);
+          setIsJoined(true);
+          return;
+        }
+
+        handleSignalingData(data);
+      };
+
+      socket.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      socket.onclose = (event) => {
+        console.warn('WebSocket closed', event.code, event.reason);
+        if (retryCount < maxRetries) {
+          retryCount += 1;
+          const delay = Math.min(3000 * retryCount, 15000);
+          retryTimeout = setTimeout(connect, delay);
+          console.log(`Reconnecting WebSocket in ${delay}ms (attempt ${retryCount})`);
+        }
+      };
     };
 
-    socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
+    connect();
 
     return () => {
-      socket.close();
+      if (retryTimeout) clearTimeout(retryTimeout);
+      if (socket) socket.close();
       Object.values(peersRef.current).forEach(peer => peer.close());
       peersRef.current = {};
     };
   }, [roomId, token, storedUser, handleSignalingData]);
 
-  const createPeerConnection = (peerId, isInitiator) => {
+  const createPeerConnection = useCallback((peerId, isInitiator) => {
     const peer = new RTCPeerConnection({
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
@@ -385,18 +423,6 @@ export default function MeetingRoom() {
     };
 
     peer.ontrack = (event) => {
-      // Add remote video
-      const remoteVideo = document.createElement('video');
-      remoteVideo.srcObject = event.streams[0];
-      remoteVideo.autoplay = true;
-      remoteVideo.playsInline = true;
-      remoteVideo.style.width = '100%';
-      remoteVideo.style.height = '100%';
-      remoteVideo.style.objectFit = 'cover';
-
-      peersVideoRefs.current[peerId] = remoteVideo;
-
-      // Update participants
       setParticipants(prev => {
         const existing = prev.find(p => p.id === peerId);
         if (!existing) {
@@ -406,10 +432,10 @@ export default function MeetingRoom() {
             isMuted: false,
             isVideoOn: true,
             stream: event.streams[0],
-            videoElement: remoteVideo
+            isLocal: false
           }];
         }
-        return prev;
+        return prev.map(p => p.id === peerId ? { ...p, stream: event.streams[0] } : p);
       });
     };
 
@@ -422,10 +448,11 @@ export default function MeetingRoom() {
     if (isInitiator) {
       createOffer(peerId);
     }
-  };
+  }, [cameraStream, createOffer, guestName, storedUser]);
 
-  const createOffer = async (peerId) => {
+  const createOffer = useCallback(async (peerId) => {
     const peer = peersRef.current[peerId];
+    if (!peer) return;
     const offer = await peer.createOffer();
     await peer.setLocalDescription(offer);
     socketRef.current.send(JSON.stringify({
@@ -434,10 +461,11 @@ export default function MeetingRoom() {
       to: peerId,
       ...offer
     }));
-  };
+  }, [guestName, storedUser]);
 
-  const createAnswer = async (peerId) => {
+  const createAnswer = useCallback(async (peerId) => {
     const peer = peersRef.current[peerId];
+    if (!peer) return;
     const answer = await peer.createAnswer();
     await peer.setLocalDescription(answer);
     socketRef.current.send(JSON.stringify({
@@ -446,7 +474,7 @@ export default function MeetingRoom() {
       to: peerId,
       ...answer
     }));
-  };
+  }, [guestName, storedUser]);
 
   // Notify others when joining
   useEffect(() => {
@@ -1150,13 +1178,20 @@ export default function MeetingRoom() {
                   ) : (
                     // Remote participant video
                     participant.stream ? (
-                      <div style={{
-                        width: "100%",
-                        height: "100%",
-                        position: "relative",
-                      }}>
-                        {participant.videoElement}
-                      </div>
+                      <video
+                        ref={(videoEl) => {
+                          if (videoEl && participant.stream) {
+                            videoEl.srcObject = participant.stream;
+                          }
+                        }}
+                        autoPlay
+                        playsInline
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
                     ) : (
                       <div style={{
                         position: "absolute",
