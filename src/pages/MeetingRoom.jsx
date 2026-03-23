@@ -41,6 +41,7 @@ export default function MeetingRoom() {
 
   const peersRef = useRef({});
   const socketRef = useRef(null);
+  const localClientIdRef = useRef(`client-${roomId || "unknown"}-${Math.random().toString(36).substr(2, 9)}`);
 
   const isMicOnRef = useRef(isMicOn);
   const isSpeakingRef = useRef(false);
@@ -279,6 +280,7 @@ export default function MeetingRoom() {
 
     switch (type) {
       case 'join':
+      case 'user-joined':
         if (from === (guestName || storedUser?.name || 'Anonymous')) {
           break;
         }
@@ -335,13 +337,18 @@ export default function MeetingRoom() {
         console.log('Connected to signaling server');
         retryCount = 0;
 
-        if (token && storedUser?.name) {
-          socket.send(JSON.stringify({
-            type: 'host-join',
-            from: storedUser.name
-          }));
-          setIsJoined(true);
-        }
+        const clientId = localClientIdRef.current;
+        const name = guestName || storedUser?.name || 'Anonymous';
+        const isHost = !!(token && storedUser?.name);
+
+        socket.send(JSON.stringify({
+          type: 'join',
+          from: clientId,
+          name,
+          is_host: isHost
+        }));
+
+        setIsJoined(true);
       };
 
       socket.onmessage = (message) => {
