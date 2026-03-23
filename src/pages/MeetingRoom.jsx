@@ -394,6 +394,32 @@ export default function MeetingRoom() {
     };
   }, [roomId, token, storedUser, handleSignalingData]);
 
+  const createOffer = useCallback(async (peerId) => {
+    const peer = peersRef.current[peerId];
+    if (!peer) return;
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    socketRef.current.send(JSON.stringify({
+      type: 'offer',
+      from: guestName || storedUser?.name || 'Anonymous',
+      to: peerId,
+      ...offer
+    }));
+  }, [guestName, storedUser]);
+
+  const createAnswer = useCallback(async (peerId) => {
+    const peer = peersRef.current[peerId];
+    if (!peer) return;
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    socketRef.current.send(JSON.stringify({
+      type: 'answer',
+      from: guestName || storedUser?.name || 'Anonymous',
+      to: peerId,
+      ...answer
+    }));
+  }, [guestName, storedUser]);
+
   const createPeerConnection = useCallback((peerId, isInitiator) => {
     const peer = new RTCPeerConnection({
       iceServers: [
@@ -449,32 +475,6 @@ export default function MeetingRoom() {
       createOffer(peerId);
     }
   }, [cameraStream, createOffer, guestName, storedUser]);
-
-  const createOffer = useCallback(async (peerId) => {
-    const peer = peersRef.current[peerId];
-    if (!peer) return;
-    const offer = await peer.createOffer();
-    await peer.setLocalDescription(offer);
-    socketRef.current.send(JSON.stringify({
-      type: 'offer',
-      from: guestName || storedUser?.name || 'Anonymous',
-      to: peerId,
-      ...offer
-    }));
-  }, [guestName, storedUser]);
-
-  const createAnswer = useCallback(async (peerId) => {
-    const peer = peersRef.current[peerId];
-    if (!peer) return;
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    socketRef.current.send(JSON.stringify({
-      type: 'answer',
-      from: guestName || storedUser?.name || 'Anonymous',
-      to: peerId,
-      ...answer
-    }));
-  }, [guestName, storedUser]);
 
   // Notify others when joining
   useEffect(() => {
