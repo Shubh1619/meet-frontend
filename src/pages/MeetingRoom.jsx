@@ -35,6 +35,11 @@ export default function MeetingRoom() {
   const [participants, setParticipants] = useState([]);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
+  const peersRef = useRef({});
+  const socketRef = useRef(null);
+  const userVideoRef = useRef(null);
+  const peersVideoRefs = useRef({});
+
   const isMicOnRef = useRef(isMicOn);
   const isSpeakingRef = useRef(false);
   const audioContextRef = useRef(null);
@@ -71,10 +76,27 @@ export default function MeetingRoom() {
         name: guestName || storedUser?.name || "You",
         isMuted: false,
         isVideoOn: true,
-        isSpeaking: false
+        isSpeaking: false,
+        isLocal: true
       }]);
     }
   }, [isJoined, guestName, storedUser]);
+
+  // Update peer connections when camera stream changes
+  useEffect(() => {
+    if (cameraStream) {
+      Object.values(peersRef.current).forEach(peer => {
+        const sender = peer.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) {
+          sender.replaceTrack(cameraStream.getVideoTracks()[0]);
+        } else {
+          cameraStream.getTracks().forEach(track => {
+            peer.addTrack(track, cameraStream);
+          });
+        }
+      });
+    }
+  }, [cameraStream]);
 
   // Auto-join if logged in
   useEffect(() => {
@@ -203,6 +225,161 @@ export default function MeetingRoom() {
       }
     };
   }, [isJoined]);
+
+  // WebRTC signaling and peer connections
+  useEffect(() => {
+    if (!isJoined) return;
+
+    const socket = new WebSocket(`ws://localhost:8000/ws/${roomId}`);
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      console.log('Connected to signaling server');
+    };
+
+    socket.onmessage = (message) => {
+      const data = JSON.parse(message.data);
+      handleSignalingData(data);
+    };
+
+    socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      socket.close();
+      Object.values(peersRef.current).forEach(peer => peer.close());
+      peersRef.current = {};
+    };
+  }, [isJoined, roomId]);
+
+  const handleSignalingData = (data) => {
+    const { type, from, to, ...payload } = data;
+
+    switch (type) {
+      case 'join':
+        // Someone joined, create peer connection
+        createPeerConnection(from, true);
+        break;
+      case 'offer':
+        createPeerConnection(from, false);
+        peersRef.current[from].setRemoteDescription(new RTCSessionDescription(payload));
+        createAnswer(from);
+        break;
+      case 'answer':
+        peersRef.current[from].setRemoteDescription(new RTCSessionDescription(payload));
+        break;
+      case 'ice-candidate':
+        if (peersRef.current[from]) {
+          peersRef.current[from].addIceCandidate(new RTCIceCandidate(payload));
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
+  const createPeerConnection = (peerId, isInitiator) => {
+    const peer = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+
+    peersRef.current[peerId] = peer;
+
+    // Add local stream tracks
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => {
+        peer.addTrack(track, cameraStream);
+      });
+    }
+
+    peer.onicecandidate = (event) => {
+      if (event.candidate) {
+        socketRef.current.send(JSON.stringify({
+          type: 'ice-candidate',
+          from: guestName || storedUser?.name || 'Anonymous',
+          to: peerId,
+          ...event.candidate
+        }));
+      }
+    };
+
+    peer.ontrack = (event) => {
+      // Add remote video
+      const remoteVideo = document.createElement('video');
+      remoteVideo.srcObject = event.streams[0];
+      remoteVideo.autoplay = true;
+      remoteVideo.playsInline = true;
+      remoteVideo.style.width = '100%';
+      remoteVideo.style.height = '100%';
+      remoteVideo.style.objectFit = 'cover';
+
+      peersVideoRefs.current[peerId] = remoteVideo;
+
+      // Update participants
+      setParticipants(prev => {
+        const existing = prev.find(p => p.id === peerId);
+        if (!existing) {
+          return [...prev, {
+            id: peerId,
+            name: peerId,
+            isMuted: false,
+            isVideoOn: true,
+            stream: event.streams[0],
+            videoElement: remoteVideo
+          }];
+        }
+        return prev;
+      });
+    };
+
+    peer.onconnectionstatechange = () => {
+      if (peer.connectionState === 'connected') {
+        console.log('Peer connected:', peerId);
+      }
+    };
+
+    if (isInitiator) {
+      createOffer(peerId);
+    }
+  };
+
+  const createOffer = async (peerId) => {
+    const peer = peersRef.current[peerId];
+    const offer = await peer.createOffer();
+    await peer.setLocalDescription(offer);
+    socketRef.current.send(JSON.stringify({
+      type: 'offer',
+      from: guestName || storedUser?.name || 'Anonymous',
+      to: peerId,
+      ...offer
+    }));
+  };
+
+  const createAnswer = async (peerId) => {
+    const peer = peersRef.current[peerId];
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    socketRef.current.send(JSON.stringify({
+      type: 'answer',
+      from: guestName || storedUser?.name || 'Anonymous',
+      to: peerId,
+      ...answer
+    }));
+  };
+
+  // Notify others when joining
+  useEffect(() => {
+    if (isJoined && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({
+        type: 'join',
+        from: guestName || storedUser?.name || 'Anonymous'
+      }));
+    }
+  }, [isJoined, guestName, storedUser]);
 
   useEffect(() => {
     if (screenVideoRef.current && screenStream) {
@@ -649,199 +826,168 @@ export default function MeetingRoom() {
           {/* Video Container */}
           <div style={{
             flex: 1,
-            display: "flex",
+            display: "grid",
+            gridTemplateColumns: participants.length === 1 ? "1fr" : (participants.length === 2 ? "1fr 1fr" : "repeat(auto-fit, minmax(300px, 1fr))"),
+            gap: 16,
             alignItems: "center",
             justifyContent: "center",
           }}>
-            <div
-              onClick={togglePin}
-              style={{
-                background: "#000",
-                borderRadius: 16,
-                overflow: "hidden",
-                position: "relative",
-                width: "100%",
-                maxWidth: 700,
-                aspectRatio: "16/9",
-                boxShadow: isPinned ? "0 0 0 3px #6759FF, 0 8px 32px rgba(103, 89, 255, 0.3)" : "0 8px 32px rgba(0,0,0,0.15)",
-                border: isSpeaking && !isPinned ? `3px solid #4CAF50` : (isPinned ? `3px solid ${accentColor}` : "2px solid transparent"),
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-              }}
-            >
-              {/* Screen Share - Full Screen (when sharing) */}
-              {isScreenSharing && (
-                <video
-                  ref={screenVideoRef}
-                  autoPlay
-                  playsInline
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
-                    background: "#000",
-                  }}
-                />
-              )}
-
-              {/* Camera Video - Main View (when not sharing) or PiP (when sharing) */}
-              {!isScreenSharing ? (
-                isCameraOn ? (
+            {participants.map((participant) => (
+              <div
+                key={participant.id}
+                onClick={participant.isLocal ? togglePin : undefined}
+                style={{
+                  background: "#000",
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  position: "relative",
+                  width: "100%",
+                  aspectRatio: "16/9",
+                  boxShadow: participant.isLocal && isPinned ? "0 0 0 3px #6759FF, 0 8px 32px rgba(103, 89, 255, 0.3)" : "0 8px 32px rgba(0,0,0,0.15)",
+                  border: participant.isSpeaking && participant.isLocal && !isPinned ? `3px solid #4CAF50` : (participant.isLocal && isPinned ? `3px solid ${accentColor}` : "2px solid transparent"),
+                  cursor: participant.isLocal ? "pointer" : "default",
+                  transition: "all 0.3s ease",
+                }}
+              >
+                {/* Screen Share - Full Screen (when sharing) */}
+                {isScreenSharing && participant.isLocal && (
                   <video
-                    ref={localVideoRef}
+                    ref={screenVideoRef}
                     autoPlay
                     playsInline
-                    muted
                     style={{
                       width: "100%",
                       height: "100%",
-                      objectFit: "cover",
-                      transform: "scaleX(-1)",
+                      objectFit: "contain",
+                      background: "#000",
                     }}
                   />
-                ) : (
-                  <div style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                  }}>
-                    <div style={{
-                      width: 100,
-                      height: 100,
-                      borderRadius: "50%",
-                      background: "rgba(103, 89, 255, 0.3)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      marginBottom: 16,
-                    }}>
-                      <FaUser style={{ fontSize: 48, color: "#6759FF" }} />
-                    </div>
-                    <span style={{ fontSize: "1rem", opacity: 0.8 }}>Camera Off</span>
-                  </div>
-                )
-              ) : (
-                /* Picture-in-Picture Camera (when screen sharing) */
-                isCameraOn ? (
-                  <div style={{
-                    position: "absolute",
-                    bottom: 12,
-                    right: 12,
-                    width: 120,
-                    height: 75,
-                    borderRadius: 8,
-                    overflow: "hidden",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                    border: "2px solid rgba(255,255,255,0.2)",
-                    background: "#000",
-                  }}>
-                    <video
-                      ref={localVideoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      style={{
+                )}
+
+                {/* Camera Video */}
+                {!isScreenSharing || !participant.isLocal ? (
+                  participant.isLocal ? (
+                    isCameraOn ? (
+                      <video
+                        ref={localVideoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          transform: "scaleX(-1)",
+                        }}
+                      />
+                    ) : (
+                      <div style={{
+                        position: "absolute",
+                        inset: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#fff",
+                      }}>
+                        <div style={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: "50%",
+                          background: "rgba(103, 89, 255, 0.3)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginBottom: 12,
+                        }}>
+                          <FaUser style={{ fontSize: 36, color: "#6759FF" }} />
+                        </div>
+                        <span style={{ fontSize: "1.1rem", fontWeight: 500 }}>{participant.name}</span>
+                      </div>
+                    )
+                  ) : (
+                    // Remote participant video
+                    participant.stream ? (
+                      <div style={{
                         width: "100%",
                         height: "100%",
-                        objectFit: "cover",
-                        transform: "scaleX(-1)",
-                      }}
-                    />
-                    <div style={{
-                      position: "absolute",
-                      bottom: 3,
-                      left: 4,
-                      padding: "2px 5px",
-                      background: "rgba(0,0,0,0.75)",
-                      borderRadius: 6,
-                      color: "#fff",
-                      fontSize: "0.55rem",
-                      fontWeight: 500,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 2,
-                    }}>
-                      {isMicOn ? (
-                        <FaMicrophone style={{ fontSize: "0.45rem" }} />
-                      ) : (
-                        <FaMicrophoneSlash style={{ fontSize: "0.45rem", color: "#FF4757" }} />
-                      )}
-                      <span>{guestName}</span>
-                    </div>
-                  </div>
-                ) : (
+                        position: "relative",
+                      }}>
+                        {participant.videoElement}
+                      </div>
+                    ) : (
+                      <div style={{
+                        position: "absolute",
+                        inset: 0,
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#fff",
+                      }}>
+                        <div style={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: "50%",
+                          background: "rgba(103, 89, 255, 0.3)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          marginBottom: 12,
+                        }}>
+                          <FaUser style={{ fontSize: 36, color: "#6759FF" }} />
+                        </div>
+                        <span style={{ fontSize: "1.1rem", fontWeight: 500 }}>{participant.name}</span>
+                      </div>
+                    )
+                  )
+                ) : null}
+
+                {/* Screen Share Badge */}
+                {isScreenSharing && participant.isLocal && (
                   <div style={{
                     position: "absolute",
-                    bottom: 12,
-                    right: 12,
-                    width: 120,
-                    height: 75,
-                    borderRadius: 8,
-                    background: "#1a1a2e",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
-                    border: "2px solid rgba(255,255,255,0.2)",
+                    top: 12,
+                    left: 12,
+                    padding: "10px 16px",
+                    background: "#FF4757",
+                    borderRadius: 12,
+                    color: "#fff",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
                     display: "flex",
-                    flexDirection: "column",
                     alignItems: "center",
-                    justifyContent: "center",
-                    gap: 2,
+                    gap: 8,
+                    boxShadow: "0 4px 12px rgba(255, 71, 87, 0.4)",
+                    animation: "sharePulse 2s infinite",
                   }}>
-                    <FaUser style={{ fontSize: 20, color: "#6759FF" }} />
-                    <span style={{ color: "#fff", fontSize: "0.6rem", opacity: 0.8 }}>{guestName}</span>
+                    <MdScreenShare style={{ fontSize: "1rem" }} />
+                    <span>You are sharing your screen</span>
                   </div>
-                )
-              )}
+                )}
 
-              {/* Screen Share Badge */}
-              {isScreenSharing && (
-                <div style={{
-                  position: "absolute",
-                  top: 12,
-                  left: 12,
-                  padding: "10px 16px",
-                  background: "#FF4757",
-                  borderRadius: 12,
-                  color: "#fff",
-                  fontSize: "0.85rem",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  boxShadow: "0 4px 12px rgba(255, 71, 87, 0.4)",
-                  animation: "sharePulse 2s infinite",
-                }}>
-                  <MdScreenShare style={{ fontSize: "1rem" }} />
-                  <span>You are sharing your screen</span>
-                </div>
-              )}
+                {/* Pin Indicator */}
+                {participant.isLocal && isPinned && (
+                  <div style={{
+                    position: "absolute",
+                    top: 12,
+                    right: 12,
+                    padding: "8px 12px",
+                    background: "rgba(103, 89, 255, 0.95)",
+                    borderRadius: 20,
+                    color: "#fff",
+                    fontSize: "0.8rem",
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}>
+                    <FaThumbtack />
+                    Pinned
+                  </div>
+                )}
 
-              {/* Pin Indicator */}
-              {isPinned && (
-                <div style={{
-                  position: "absolute",
-                  top: 12,
-                  right: 12,
-                  padding: "8px 12px",
-                  background: "rgba(103, 89, 255, 0.95)",
-                  borderRadius: 20,
-                  color: "#fff",
-                  fontSize: "0.8rem",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}>
-                  <FaThumbtack />
-                  Pinned
-                </div>
-              )}
-
-              {/* Name Badge (when not sharing screen) */}
-              {!isScreenSharing && (
+                {/* Name Badge */}
                 <div style={{
                   position: "absolute",
                   bottom: 16,
@@ -861,37 +1007,37 @@ export default function MeetingRoom() {
                     alignItems: "center",
                     gap: 8,
                   }}>
-                    {isMicOn ? (
+                    {participant.isLocal && (isMicOn ? (
                       <FaMicrophone style={{ fontSize: "0.85rem" }} />
                     ) : (
                       <FaMicrophoneSlash style={{ fontSize: "0.85rem", color: "#FF4757" }} />
-                    )}
-                    <span>{guestName}</span>
+                    ))}
+                    <span>{participant.name}</span>
                   </div>
                 </div>
-              )}
 
-              {/* Speaking Indicator (when not sharing screen) */}
-              {!isScreenSharing && isMicOn && isSpeaking && (
-                <div style={{
-                  position: "absolute",
-                  bottom: 16,
-                  right: 16,
-                  padding: "6px 12px",
-                  background: "rgba(76, 175, 80, 0.9)",
-                  borderRadius: 16,
-                  color: "#fff",
-                  fontSize: "0.75rem",
-                  fontWeight: 600,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}>
-                  <FaCircle style={{ fontSize: "0.5rem", animation: "pulse 1s infinite" }} />
-                  Speaking
-                </div>
-              )}
-            </div>
+                {/* Speaking Indicator */}
+                {participant.isSpeaking && (
+                  <div style={{
+                    position: "absolute",
+                    bottom: 16,
+                    right: 16,
+                    padding: "6px 12px",
+                    background: "rgba(76, 175, 80, 0.9)",
+                    borderRadius: 16,
+                    color: "#fff",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}>
+                    <FaCircle style={{ fontSize: "0.5rem", animation: "pulse 1s infinite" }} />
+                    Speaking
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
 
