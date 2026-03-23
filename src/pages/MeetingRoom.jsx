@@ -33,11 +33,14 @@ export default function MeetingRoom() {
   const [isPinned, setIsPinned] = useState(false);
 
   const [participants, setParticipants] = useState([]);
+  const [waitingRoomUsers, setWaitingRoomUsers] = useState([]);
+  const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
+  const [waitingRoomStatus, setWaitingRoomStatus] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const peersRef = useRef({});
   const socketRef = useRef(null);
-  const userVideoRef = useRef(null);
   const peersVideoRefs = useRef({});
 
   const isMicOnRef = useRef(isMicOn);
@@ -102,15 +105,61 @@ export default function MeetingRoom() {
   useEffect(() => {
     if (token && storedUser?.name) {
       setGuestName(storedUser.name);
+      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+        socketRef.current.send(JSON.stringify({
+          type: 'host-join',
+          from: storedUser.name
+        }));
+      }
       setIsJoined(true);
     }
   }, [token, storedUser]);
 
   const handleJoin = () => {
     if (guestName.trim()) {
-      setIsJoined(true);
+      const userData = {
+        id: roomId,
+        name: guestName.trim(),
+        timestamp: Date.now()
+      };
       localStorage.setItem("guestName", guestName);
+      socketRef.current?.send(JSON.stringify({
+        type: 'waiting-room-request',
+        user: userData
+      }));
+      setIsInWaitingRoom(true);
     }
+  };
+
+  const handleWaitingRoomResponse = (data) => {
+    const { approved, reason } = data;
+    if (approved) {
+      setIsInWaitingRoom(false);
+      setIsJoined(true);
+    } else {
+      setWaitingRoomStatus({ rejected: true, reason: reason || "Entry denied by host" });
+    }
+  };
+
+  const approveUser = (userName) => {
+    socketRef.current?.send(JSON.stringify({
+      type: 'waiting-room-response',
+      from: guestName || storedUser?.name,
+      to: userName,
+      approved: true
+    }));
+    setWaitingRoomUsers(prev => prev.filter(u => u.name !== userName));
+  };
+
+  const rejectUser = (userName) => {
+    socketRef.current?.send(JSON.stringify({
+      type: 'waiting-room-response',
+      from: guestName || storedUser?.name,
+      to: userName,
+      approved: false,
+      reason: "Entry denied by host"
+    }));
+    setWaitingRoomUsers(prev => prev.filter(u => u.name !== userName));
   };
 
   const copyPin = () => {
@@ -226,39 +275,11 @@ export default function MeetingRoom() {
     };
   }, [isJoined]);
 
-  // WebRTC signaling and peer connections
-  useEffect(() => {
-    if (!isJoined) return;
-
-    const socket = new WebSocket(`ws://localhost:8000/ws/${roomId}`);
-    socketRef.current = socket;
-
-    socket.onopen = () => {
-      console.log('Connected to signaling server');
-    };
-
-    socket.onmessage = (message) => {
-      const data = JSON.parse(message.data);
-      handleSignalingData(data);
-    };
-
-    socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
-    return () => {
-      socket.close();
-      Object.values(peersRef.current).forEach(peer => peer.close());
-      peersRef.current = {};
-    };
-  }, [isJoined, roomId]);
-
   const handleSignalingData = (data) => {
-    const { type, from, to, ...payload } = data;
+    const { type, from, ...payload } = data;
 
     switch (type) {
       case 'join':
-        // Someone joined, create peer connection
         createPeerConnection(from, true);
         break;
       case 'offer':
@@ -278,6 +299,62 @@ export default function MeetingRoom() {
         break;
     }
   };
+
+  // WebRTC signaling and peer connections
+  useEffect(() => {
+    if (!roomId) return;
+
+    const socket = new WebSocket(`ws://localhost:8000/ws/${roomId}`);
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      console.log('Connected to signaling server');
+      
+      // If logged-in user, notify server as host
+      if (token && storedUser?.name) {
+        socket.send(JSON.stringify({
+          type: 'host-join',
+          from: storedUser.name
+        }));
+        setIsJoined(true);
+      }
+    };
+
+    socket.onmessage = (message) => {
+      const data = JSON.parse(message.data);
+      
+      if (data.type === 'waiting-room-request') {
+        setWaitingRoomUsers(prev => {
+          if (prev.find(u => u.name === data.user.name)) return prev;
+          return [...prev, data.user];
+        });
+        return;
+      }
+      
+      if (data.type === 'waiting-room-response') {
+        handleWaitingRoomResponse(data);
+        return;
+      }
+
+      if (data.type === 'host-join') {
+        setIsInWaitingRoom(false);
+        setIsJoined(true);
+        return;
+      }
+      
+      handleSignalingData(data);
+    };
+
+    socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    return () => {
+      socket.close();
+      Object.values(peersRef.current).forEach(peer => peer.close());
+      peersRef.current = {};
+    };
+  }, [roomId, token, storedUser, handleSignalingData]);
 
   const createPeerConnection = (peerId, isInitiator) => {
     const peer = new RTCPeerConnection({
@@ -621,12 +698,153 @@ export default function MeetingRoom() {
     { id: "ai", icon: <FaRobot />, label: "AI" },
     { id: "chat", icon: <FaComment />, label: "Chat" },
     { id: "notes", icon: <FaStickyNote />, label: "Notes" },
+    { id: "waiting-room", icon: <FaUser />, label: "Waiting" },
     { id: "participants", icon: <FaUsers />, label: "Team" },
   ];
 
-  // Guest Join Screen
+  // Guest Join Screen / Waiting Room
   if (!isJoined) {
     const isLoggedIn = !!token;
+    
+    // Waiting room status screen
+    if (isInWaitingRoom && !waitingRoomStatus) {
+      return (
+        <div style={{
+          minHeight: "100vh",
+          background: bgColor,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "'Andika', sans-serif",
+        }}>
+          <div style={{
+            background: cardBg,
+            borderRadius: 20,
+            padding: 40,
+            maxWidth: 420,
+            width: "90%",
+            textAlign: "center",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+            border: `1px solid ${borderColor}`,
+          }}>
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #FFA500, #FF6B35)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 24px",
+              animation: "pulse 2s infinite",
+            }}>
+              <FaUser style={{ fontSize: "1.8rem", color: "#fff" }} />
+            </div>
+
+            <h2 style={{ color: textColor, marginBottom: 8, fontSize: "1.5rem" }}>Waiting Room</h2>
+            <p style={{ color: mutedColor, marginBottom: 24, fontSize: "0.9rem" }}>
+              Please wait while the host reviews your request...
+            </p>
+
+            <div style={{
+              padding: 16,
+              background: darkMode ? "#252540" : "#f8f8ff",
+              borderRadius: 12,
+              border: `1px solid ${borderColor}`,
+              marginBottom: 16,
+            }}>
+              <div style={{ color: textColor, fontWeight: 600, marginBottom: 8 }}>Your Details</div>
+              <div style={{ color: mutedColor, fontSize: "0.9rem" }}>Name: {guestName}</div>
+            </div>
+
+            <button
+              onClick={() => {
+                setIsInWaitingRoom(false);
+                setGuestName("");
+              }}
+              style={{
+                width: "100%",
+                padding: "14px",
+                background: "transparent",
+                color: mutedColor,
+                border: `1px solid ${borderColor}`,
+                borderRadius: 12,
+                fontSize: "1rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "'Andika', sans-serif",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Rejected from waiting room
+    if (waitingRoomStatus?.rejected) {
+      return (
+        <div style={{
+          minHeight: "100vh",
+          background: bgColor,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontFamily: "'Andika', sans-serif",
+        }}>
+          <div style={{
+            background: cardBg,
+            borderRadius: 20,
+            padding: 40,
+            maxWidth: 420,
+            width: "90%",
+            textAlign: "center",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+            border: `1px solid ${borderColor}`,
+          }}>
+            <div style={{
+              width: 64,
+              height: 64,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #FF4757, #FF6B7A)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 24px",
+            }}>
+              <FaTimes style={{ fontSize: "1.8rem", color: "#fff" }} />
+            </div>
+
+            <h2 style={{ color: textColor, marginBottom: 8, fontSize: "1.5rem" }}>Entry Denied</h2>
+            <p style={{ color: mutedColor, marginBottom: 24, fontSize: "0.9rem" }}>
+              {waitingRoomStatus.reason || "The host has denied your request to join."}
+            </p>
+
+            <button
+              onClick={() => {
+                setWaitingRoomStatus(null);
+                navigate("/dashboard");
+              }}
+              style={{
+                width: "100%",
+                padding: "14px",
+                background: "linear-gradient(135deg, #6759FF, #8B7FFF)",
+                color: "#fff",
+                border: "none",
+                borderRadius: 12,
+                fontSize: "1rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "'Andika', sans-serif",
+              }}
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      );
+    }
     
     return (
       <div style={{
@@ -759,6 +977,30 @@ export default function MeetingRoom() {
 
         {/* Right - Actions */}
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {waitingRoomUsers.length > 0 && (
+            <button
+              onClick={() => setRightPanel("waiting-room")}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "8px 14px",
+                background: "linear-gradient(135deg, #FFA500, #FF6B35)",
+                border: "none",
+                borderRadius: 8,
+                cursor: "pointer",
+                fontSize: "0.85rem",
+                color: "#fff",
+                fontWeight: 600,
+                fontFamily: "'Andika', sans-serif",
+                animation: "pulse 2s infinite",
+              }}
+            >
+              <FaUser style={{ fontSize: "0.9rem" }} />
+              <span>{waitingRoomUsers.length} in Waiting Room</span>
+            </button>
+          )}
+
           <button
             onClick={() => setRightPanel("participants")}
             style={{
@@ -1334,6 +1576,116 @@ export default function MeetingRoom() {
                       >
                         <FaThumbtack style={{ fontSize: "0.9rem" }} />
                       </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Waiting Room Panel */}
+            {rightPanel === "waiting-room" && (
+              <div>
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 16,
+                }}>
+                  <h3 style={{ margin: 0, color: textColor, fontSize: "1rem" }}>Waiting Room</h3>
+                  {waitingRoomUsers.length > 0 && (
+                    <span style={{
+                      padding: "4px 10px",
+                      background: "linear-gradient(135deg, #FFA500, #FF6B35)",
+                      borderRadius: 12,
+                      color: "#fff",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                    }}>
+                      {waitingRoomUsers.length} pending
+                    </span>
+                  )}
+                </div>
+                
+                {waitingRoomUsers.length === 0 ? (
+                  <div style={{
+                    textAlign: "center",
+                    padding: 40,
+                    color: mutedColor,
+                  }}>
+                    <FaUser style={{ fontSize: "3rem", marginBottom: 12, opacity: 0.5 }} />
+                    <p>No one is waiting to join</p>
+                  </div>
+                ) : (
+                  waitingRoomUsers.map((user, idx) => (
+                    <div key={idx} style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: 14,
+                      background: darkMode ? "#252540" : "#f8f8ff",
+                      borderRadius: 12,
+                      marginBottom: 10,
+                      border: `1px solid ${borderColor}`,
+                    }}>
+                      <div style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: "50%",
+                        background: "linear-gradient(135deg, #FFA500, #FF6B35)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#fff",
+                        fontWeight: 700,
+                      }}>
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 600, color: textColor, fontSize: "0.95rem" }}>{user.name}</div>
+                        <div style={{ fontSize: "0.8rem", color: mutedColor, marginTop: 4 }}>
+                          Waiting to join
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          onClick={() => rejectUser(user.name)}
+                          style={{
+                            padding: "8px 12px",
+                            background: "transparent",
+                            border: `1px solid ${borderColor}`,
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            color: "#FF4757",
+                            fontSize: "0.8rem",
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <FaTimes style={{ fontSize: "0.8rem" }} />
+                          Reject
+                        </button>
+                        <button
+                          onClick={() => approveUser(user.name)}
+                          style={{
+                            padding: "8px 12px",
+                            background: "linear-gradient(135deg, #4CAF50, #66BB6A)",
+                            border: "none",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            color: "#fff",
+                            fontSize: "0.8rem",
+                            fontWeight: 600,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                          }}
+                        >
+                          <FaCircle style={{ fontSize: "0.8rem" }} />
+                          Accept
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
