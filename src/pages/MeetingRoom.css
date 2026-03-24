@@ -1,0 +1,34 @@
+/* MeetingRoom.css */
+
+#main-content {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+#videos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 10px;
+  flex: 1;
+}
+
+#pinned-column {
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+}
+
+#participants-strip {
+  position: fixed;
+  bottom: 100px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.pin-active #videos {
+  grid-template-columns: 1fr;
+}
