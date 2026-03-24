@@ -21,7 +21,7 @@ export default function MeetingRoom() {
   const [guestName, setGuestName] = useState("");
   const [isJoined, setIsJoined] = useState(false);
   const [cameraStream] = useState(null);
-  const [screenStream, setScreenStream] = useState(null);
+  const [screenStream] = useState(null);
   const [isMicOn, setIsMicOn] = useState(() => localStorage.getItem("isMicOn") !== "false");
   const [isCameraOn, setIsCameraOn] = useState(() => localStorage.getItem("isCameraOn") !== "false");
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -77,13 +77,19 @@ export default function MeetingRoom() {
 
   const handleJoin = () => {
     if (guestName.trim()) {
-      if (socketRef.current?.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({
-          type: 'waiting-room-request',
-          user: { name: guestName.trim(), id: roomId }
-        }));
+      if (token) {
+        // Host user, join directly
+        setIsJoined(true);
+      } else {
+        // Guest user, request approval
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+          socketRef.current.send(JSON.stringify({
+            type: 'waiting-room-request',
+            user: { name: guestName.trim(), id: roomId }
+          }));
+        }
+        setIsInWaitingRoom(true);
       }
-      setIsInWaitingRoom(true);
     }
   };
 
