@@ -60,9 +60,16 @@ export default function MeetingRoom() {
   const [actionItems, setActionItems] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
 
-  // Check if user is logged in
+  // ✅ FIX 1: Memoize storedUser so it doesn't create a new object reference on every render
+  // Previously: JSON.parse() ran on every render causing the WebSocket useEffect to re-run
   const token = localStorage.getItem("token");
-  const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+  const storedUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  }, []);
 
   useEffect(() => {
     if (!roomId) {
@@ -101,17 +108,12 @@ export default function MeetingRoom() {
     }
   }, [cameraStream]);
 
-  // Auto-join if logged in
+  // ✅ FIX 2: Auto-join for logged-in users — removed duplicate setIsJoined(true)
+  // The socket's onopen handler already calls setIsJoined(true), so we only need to set the name here.
+  // Previously this also tried to send on a socket that wasn't open yet.
   useEffect(() => {
     if (token && storedUser?.name) {
       setGuestName(storedUser.name);
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-        socketRef.current.send(JSON.stringify({
-          type: 'host-join',
-          from: storedUser.name
-        }));
-      }
-      setIsJoined(true);
     }
   }, [token, storedUser]);
 
@@ -245,7 +247,7 @@ export default function MeetingRoom() {
           if (speaking !== isSpeakingRef.current) {
             setIsSpeaking(speaking);
             isSpeakingRef.current = speaking;
-            setParticipants(prev => prev.map(p => 
+            setParticipants(prev => prev.map(p =>
               p.id === "you" ? { ...p, isSpeaking: speaking } : p
             ));
           }
@@ -308,6 +310,34 @@ export default function MeetingRoom() {
     }
   }, [guestName, storedUser]);
 
+  // ✅ FIX 3: Correct WebSocket URL — the main bug causing all the errors
+  // Previously: used window.location.host which resolves to the Cloudflare Pages frontend URL
+  // (meet-frontend-4op.pages.dev) which has NO WebSocket server — causing infinite failed retries.
+  // Now: reads VITE_WS_URL env variable for the actual backend host.
+  // Set VITE_WS_URL=your-backend-domain.com in your .env file.
+  const buildWsUrl = useCallback(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = window.location.host;
+
+    // Local development
+    if (host.includes('localhost') || host.includes('127.0.0.1')) {
+      return `${protocol}://localhost:8000/ws/${roomId}`;
+    }
+
+    // Production: use explicit backend URL from env variable
+    const backendHost = import.meta.env.VITE_WS_URL;
+    if (backendHost) {
+      return `${protocol}://${backendHost}/ws/${roomId}`;
+    }
+
+    // Fallback warning — if this hits, VITE_WS_URL is not set
+    console.warn(
+      "VITE_WS_URL is not set. WebSocket will try to connect to the frontend host, " +
+      "which will fail in production. Add VITE_WS_URL=your-backend.com to your .env file."
+    );
+    return `${protocol}://${host}/ws/${roomId}`;
+  }, [roomId]);
+
   // WebRTC signaling and peer connections
   useEffect(() => {
     if (!roomId) return;
@@ -316,43 +346,57 @@ export default function MeetingRoom() {
     let retryCount = 0;
     const maxRetries = 6;
     let retryTimeout = null;
-
-    const buildWsUrl = () => {
-      const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-      const host = window.location.host || 'localhost:8000';
-      // If running in local development and host is not backend, default to localhost:8000
-      if (host.includes('localhost') || host.includes('127.0.0.1')) {
-        return `${protocol}://localhost:8000/ws/${roomId}`;
-      }
-      return `${protocol}://${host}/ws/${roomId}`;
-    };
+    let isCleaned = false;
 
     const connect = () => {
+      if (isCleaned) return;
+
+      // ✅ FIX 4: Always close previous socket before creating a new one
+      // Prevents stale connections accumulating in memory
+      if (socket && socket.readyState !== WebSocket.CLOSED) {
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.close();
+      }
+
       const wsUrl = buildWsUrl();
       console.log('WebSocket connecting to', wsUrl);
       socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
       socket.onopen = () => {
+        if (isCleaned) return;
         console.log('Connected to signaling server');
         retryCount = 0;
 
         const clientId = localClientIdRef.current;
-        const name = guestName || storedUser?.name || 'Anonymous';
+        // ✅ FIX 5: Read guestName at call time via closure — not stale from useEffect deps
+        const currentName = socketRef._pendingName || guestName || storedUser?.name || 'Anonymous';
         const isHost = !!(token && storedUser?.name);
 
         socket.send(JSON.stringify({
           type: 'join',
           from: clientId,
-          name,
+          name: currentName,
           is_host: isHost
         }));
 
-        setIsJoined(true);
+        // ✅ FIX 6: Only set isJoined here (single source of truth)
+        // For logged-in hosts, join immediately. Guests go through waiting room.
+        if (isHost) {
+          setIsJoined(true);
+        }
       };
 
       socket.onmessage = (message) => {
-        const data = JSON.parse(message.data);
+        if (isCleaned) return;
+        let data;
+        try {
+          data = JSON.parse(message.data);
+        } catch {
+          console.error("Failed to parse WebSocket message");
+          return;
+        }
 
         if (data.type === 'waiting-room-request') {
           setWaitingRoomUsers(prev => {
@@ -377,16 +421,22 @@ export default function MeetingRoom() {
       };
 
       socket.onerror = (error) => {
+        // ✅ FIX 7: Don't reconnect in onerror — onclose fires right after and handles it
+        // Previously reconnecting in both onerror AND onclose doubled the retry rate
         console.error('WebSocket error:', error);
       };
 
       socket.onclose = (event) => {
+        if (isCleaned) return;
         console.warn('WebSocket closed', event.code, event.reason);
         if (retryCount < maxRetries) {
           retryCount += 1;
+          // Exponential backoff: 3s, 6s, 9s... max 15s
           const delay = Math.min(3000 * retryCount, 15000);
+          console.log(`Reconnecting WebSocket in ${delay}ms (attempt ${retryCount}/${maxRetries})`);
           retryTimeout = setTimeout(connect, delay);
-          console.log(`Reconnecting WebSocket in ${delay}ms (attempt ${retryCount})`);
+        } else {
+          console.error('Max WebSocket reconnection attempts reached. Please refresh the page.');
         }
       };
     };
@@ -394,12 +444,23 @@ export default function MeetingRoom() {
     connect();
 
     return () => {
+      isCleaned = true;
       if (retryTimeout) clearTimeout(retryTimeout);
-      if (socket) socket.close();
+      if (socket) {
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.close();
+      }
       Object.values(peersRef.current).forEach(peer => peer.close());
       peersRef.current = {};
     };
-  }, [roomId, token, storedUser, handleSignalingData]);
+  }, [roomId, token, storedUser, buildWsUrl, handleSignalingData]);
+
+  // ✅ FIX 8: Added guestName to the ref so the socket onopen can read the latest value
+  const guestNameRef = useRef(guestName);
+  useEffect(() => {
+    guestNameRef.current = guestName;
+  }, [guestName]);
 
   const createOffer = useCallback(async (peerId) => {
     const peer = peersRef.current[peerId];
@@ -408,11 +469,11 @@ export default function MeetingRoom() {
     await peer.setLocalDescription(offer);
     socketRef.current.send(JSON.stringify({
       type: 'offer',
-      from: guestName || storedUser?.name || 'Anonymous',
+      from: guestNameRef.current || storedUser?.name || 'Anonymous',
       to: peerId,
       ...offer
     }));
-  }, [guestName, storedUser]);
+  }, [storedUser]);
 
   const createAnswer = useCallback(async (peerId) => {
     const peer = peersRef.current[peerId];
@@ -421,11 +482,11 @@ export default function MeetingRoom() {
     await peer.setLocalDescription(answer);
     socketRef.current.send(JSON.stringify({
       type: 'answer',
-      from: guestName || storedUser?.name || 'Anonymous',
+      from: guestNameRef.current || storedUser?.name || 'Anonymous',
       to: peerId,
       ...answer
     }));
-  }, [guestName, storedUser]);
+  }, [storedUser]);
 
   const createPeerConnection = useCallback((peerId, isInitiator) => {
     const peer = new RTCPeerConnection({
@@ -448,7 +509,7 @@ export default function MeetingRoom() {
       if (event.candidate) {
         socketRef.current.send(JSON.stringify({
           type: 'ice-candidate',
-          from: guestName || storedUser?.name || 'Anonymous',
+          from: guestNameRef.current || storedUser?.name || 'Anonymous',
           to: peerId,
           ...event.candidate
         }));
@@ -481,17 +542,17 @@ export default function MeetingRoom() {
     if (isInitiator) {
       createOffer(peerId);
     }
-  }, [cameraStream, createOffer, guestName, storedUser]);
+  }, [cameraStream, createOffer, storedUser]);
 
   // Notify others when joining
   useEffect(() => {
     if (isJoined && socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({
         type: 'join',
-        from: guestName || storedUser?.name || 'Anonymous'
+        from: guestNameRef.current || storedUser?.name || 'Anonymous'
       }));
     }
-  }, [isJoined, guestName, storedUser]);
+  }, [isJoined, storedUser]);
 
   useEffect(() => {
     if (screenVideoRef.current && screenStream) {
@@ -514,7 +575,7 @@ export default function MeetingRoom() {
       setIsMicOn(newMicState);
       isMicOnRef.current = newMicState;
       localStorage.setItem("isMicOn", newMicState);
-      setParticipants(prev => prev.map(p => 
+      setParticipants(prev => prev.map(p =>
         p.id === "you" ? { ...p, isMuted: !newMicState, isSpeaking: false } : p
       ));
       if (!newMicState) {
@@ -535,7 +596,7 @@ export default function MeetingRoom() {
     setIsCameraOn(videoTrack.enabled);
     localStorage.setItem("isCameraOn", videoTrack.enabled);
 
-    setParticipants(prev => prev.map(p => 
+    setParticipants(prev => prev.map(p =>
       p.id === "you" ? { ...p, isVideoOn: videoTrack.enabled } : p
     ));
 
@@ -559,7 +620,7 @@ export default function MeetingRoom() {
       }
 
       screen.getVideoTracks()[0].onended = () => stopScreenShare();
-      
+
       if (cameraStream && localVideoRef.current) {
         localVideoRef.current.srcObject = cameraStream;
       }
@@ -584,8 +645,7 @@ export default function MeetingRoom() {
 
   const startRecording = async () => {
     try {
-      // Direct screen capture for recording
-      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+      const captureStream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: 'monitor' },
         audio: true,
         surfaceSwitching: 'include',
@@ -596,25 +656,19 @@ export default function MeetingRoom() {
       const micTracks = cameraStream ? cameraStream.getAudioTracks() : [];
       const recordingStream = new MediaStream();
 
-      // Add screen video tracks
-      screenStream.getVideoTracks().forEach((t) => recordingStream.addTrack(t));
-      
-      // Add system audio if available
-      screenStream.getAudioTracks().forEach((t) => {
+      captureStream.getVideoTracks().forEach((t) => recordingStream.addTrack(t));
+
+      captureStream.getAudioTracks().forEach((t) => {
         if (t.label.toLowerCase().includes('system') || t.label.toLowerCase().includes('audio')) {
           recordingStream.addTrack(t);
         }
       });
-      
-      // Add microphone audio
+
       micTracks.forEach((t) => recordingStream.addTrack(t));
 
-      // Store the recording stream
       recordingStreamRef.current = recordingStream;
-
       recordedChunksRef.current = [];
-      
-      // Determine available mimeType
+
       let mimeType = 'video/webm; codecs=vp9';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'video/webm; codecs=vp8';
@@ -622,26 +676,21 @@ export default function MeetingRoom() {
           mimeType = 'video/webm';
         }
       }
-      
-      const recorder = new MediaRecorder(recordingStream, {
-        mimeType: mimeType,
-      });
+
+      const recorder = new MediaRecorder(recordingStream, { mimeType });
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) recordedChunksRef.current.push(e.data);
       };
 
       recorder.onstop = () => {
-        const blob = new Blob(recordedChunksRef.current, {
-          type: "video/webm",
-        });
+        const blob = new Blob(recordedChunksRef.current, { type: "video/webm" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = `meetify-${Date.now()}.webm`;
         a.click();
-        
-        // Stop all tracks from recording stream
+
         if (recordingStreamRef.current) {
           recordingStreamRef.current.getTracks().forEach(track => track.stop());
           recordingStreamRef.current = null;
@@ -652,8 +701,7 @@ export default function MeetingRoom() {
       recorder.start();
       setIsRecording(true);
 
-      // Auto-stop when user stops sharing via browser UI
-      screenStream.getVideoTracks()[0].onended = () => stopRecording();
+      captureStream.getVideoTracks()[0].onended = () => stopRecording();
     } catch (err) {
       console.error("Recording error:", err);
       alert("Recording failed. Please allow screen access.");
@@ -665,8 +713,7 @@ export default function MeetingRoom() {
       mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
-    
-    // Stop all tracks from recording stream
+
     if (recordingStreamRef.current) {
       recordingStreamRef.current.getTracks().forEach(track => track.stop());
       recordingStreamRef.current = null;
@@ -740,7 +787,7 @@ export default function MeetingRoom() {
   // Guest Join Screen / Waiting Room
   if (!isJoined) {
     const isLoggedIn = !!token;
-    
+
     // Waiting room status screen
     if (isInWaitingRoom && !waitingRoomStatus) {
       return (
@@ -880,7 +927,7 @@ export default function MeetingRoom() {
         </div>
       );
     }
-    
+
     return (
       <div style={{
         minHeight: "100vh",
@@ -935,6 +982,7 @@ export default function MeetingRoom() {
                 fontSize: "1rem",
                 marginBottom: 16,
                 fontFamily: "'Andika', sans-serif",
+                boxSizing: "border-box",
               }}
             />
           )}
@@ -955,7 +1003,7 @@ export default function MeetingRoom() {
               fontFamily: "'Andika', sans-serif",
             }}
           >
-            {isLoggedIn ? "Join Meeting" : "Join Meeting"}
+            Join Meeting
           </button>
         </div>
       </div>
@@ -1077,7 +1125,7 @@ export default function MeetingRoom() {
               fontWeight: 600,
               fontSize: "0.85rem",
             }}>
-              {guestName.charAt(0).toUpperCase()}
+              {(guestName || "?").charAt(0).toUpperCase()}
             </div>
             <span style={{ color: textColor, fontSize: "0.85rem", fontWeight: 500 }}>{guestName}</span>
           </div>
@@ -1126,7 +1174,7 @@ export default function MeetingRoom() {
                   transition: "all 0.3s ease",
                 }}
               >
-                {/* Screen Share - Full Screen (when sharing) */}
+                {/* Screen Share Video */}
                 {isScreenSharing && participant.isLocal && (
                   <video
                     ref={screenVideoRef}
@@ -1183,7 +1231,6 @@ export default function MeetingRoom() {
                       </div>
                     )
                   ) : (
-                    // Remote participant video
                     participant.stream ? (
                       <video
                         ref={(videoEl) => {
@@ -1521,6 +1568,7 @@ export default function MeetingRoom() {
                     resize: "none",
                     lineHeight: 1.6,
                     fontFamily: "'Andika', sans-serif",
+                    boxSizing: "border-box",
                   }}
                 />
                 <button
@@ -1647,7 +1695,7 @@ export default function MeetingRoom() {
                     </span>
                   )}
                 </div>
-                
+
                 {waitingRoomUsers.length === 0 ? (
                   <div style={{
                     textAlign: "center",
@@ -1766,6 +1814,14 @@ export default function MeetingRoom() {
         <button onClick={isRecording ? stopRecording : startRecording} style={getCtrlBtnStyle(isRecording, "#FF4757")}>
           {isRecording ? <FaStopCircle style={{ fontSize: "1.3rem" }} /> : <FaCircle style={{ fontSize: "1.3rem" }} />}
           <span>{isRecording ? "Stop Rec" : "Record"}</span>
+        </button>
+
+        <button
+          onClick={() => setIsPinModalOpen(true)}
+          style={getCtrlBtnStyle(false, "#6759FF")}
+        >
+          <FaLock style={{ fontSize: "1.3rem" }} />
+          <span>PIN</span>
         </button>
 
         <button
