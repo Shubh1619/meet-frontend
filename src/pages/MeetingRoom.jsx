@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDarkMode } from "../context/DarkModeContext";
 import {
@@ -16,15 +16,11 @@ export default function MeetingRoom() {
 
   const localVideoRef = useRef(null);
   const rawVideoRef = useRef(null);
-  const screenVideoRef = useRef(null);
-  const cameraStreamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
-  const recordedChunksRef = useRef([]);
-  const recordingStreamRef = useRef(null);
 
   const [guestName, setGuestName] = useState("");
   const [isJoined, setIsJoined] = useState(false);
-  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraStream] = useState(null);
   const [screenStream, setScreenStream] = useState(null);
   const [isMicOn, setIsMicOn] = useState(() => localStorage.getItem("isMicOn") !== "false");
   const [isCameraOn, setIsCameraOn] = useState(() => localStorage.getItem("isCameraOn") !== "false");
