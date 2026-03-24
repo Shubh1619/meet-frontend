@@ -7,10 +7,13 @@ import "./MeetingRoom.css";
 
 export default function MeetingRoom() {
   // --- State ---
+  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+  const isLoggedIn = Boolean(localStorage.getItem("token"));
+
   const [setupVisible, setSetupVisible] = useState(true);
   const [roomVisible, setRoomVisible] = useState(false);
   const [roomName, setRoomName] = useState("Room Name");
-  const [myName, setMyName] = useState("Guest");
+  const [myName, setMyName] = useState(storedUser?.name || "Guest");
 
   const [participants, setParticipants] = useState([]);
   const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
@@ -33,13 +36,17 @@ export default function MeetingRoom() {
   const cameraStreamRef = useRef(null);
   const pcsRef = useRef({});
   const wsRef = useRef(null);
-  const myId = useRef(Math.random().toString(36).substring(2, 9));
+  const myId = React.useId();
 
   // --- Join Call ---
   const joinCall = async (room, name) => {
-    setMyName(name);
+    const resolvedName = isLoggedIn ? myName : name || myName || "Guest";
+    setMyName(resolvedName);
     setSetupVisible(false);
     setRoomVisible(true);
+    if (isLoggedIn) {
+      console.log("Logged in user, using profile identity:", resolvedName);
+    }
     setRoomName(room);
 
     sessionStorage.setItem("room", room);
@@ -79,6 +86,29 @@ export default function MeetingRoom() {
     });
   };
 
+  const monitorAudioLevel = (stream, id) => {
+    if (!id) return;
+    setActiveSpeakerId(id);
+  };
+  const toggleMic = () => {};
+  const toggleCamera = () => {};
+  const toggleScreenShare = () => setIsScreenSharing((prev) => !prev);
+  const startRecording = () => {
+    setIsRecording(true);
+    setRecordingTimer("00:00");
+  };
+  const stopRecording = () => setIsRecording(false);
+  const leaveMeeting = () => {
+    setRoomVisible(false);
+    setSetupVisible(true);
+    setParticipants([]);
+  };
+  const sendChatMessage = (message) => {
+    if (!message) return;
+    setMessages((prev) => [...prev, { from: myName || "Guest", text: message, time: new Date().toLocaleTimeString(), own: true }]);
+    setMsgInput("");
+  };
+
   // --- Peer Connection ---
   const createPeerConnection = (remoteId, remoteName, audioEnabled, videoEnabled) => {
     const pc = new RTCPeerConnection({
@@ -108,7 +138,7 @@ export default function MeetingRoom() {
 
     pc.onicecandidate = (e) => {
       if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "candidate", candidate: e.candidate, from: myId.current, to: remoteId }));
+        wsRef.current.send(JSON.stringify({ type: "candidate", candidate: e.candidate, from: myId, to: remoteId }));
       }
     };
 
@@ -137,7 +167,7 @@ export default function MeetingRoom() {
     socket.onmessage = async (e) => {
       if (e.data.includes('"type":"ping"')) return;
       const msg = JSON.parse(e.data);
-      if (msg.from === myId.current) return;
+      if (msg.from === myId) return;
 
       let pc = pcsRef.current[msg.from];
       if (!pc && (msg.type === "offer" || msg.type === "join")) {
@@ -145,17 +175,19 @@ export default function MeetingRoom() {
       }
 
       switch (msg.type) {
-        case "join":
+        case "join": {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: myName }));
+          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId, to: msg.from, name: myName }));
           break;
-        case "offer":
+        }
+        case "offer": {
           await pc.setRemoteDescription(new RTCSessionDescription(msg));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: myName }));
+          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId, to: msg.from, name: myName }));
           break;
+        }
         case "answer":
           await pc.setRemoteDescription(new RTCSessionDescription(msg));
           break;
