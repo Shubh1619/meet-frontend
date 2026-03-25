@@ -85,7 +85,7 @@
 }
 
 .participant-grid.participants-1 {
-  grid-template-columns: minmax(320px, 860px);
+  grid-template-columns: minmax(320px, min(980px, 100%));
   justify-content: center;
 }
 
@@ -322,7 +322,7 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 18px;
+  bottom: calc(14px + env(safe-area-inset-bottom));
   z-index: 20;
   display: flex;
   justify-content: center;
@@ -330,6 +330,7 @@
 }
 
 .controls-bar {
+  width: min(100%, 1080px);
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -545,7 +546,7 @@
 @media (max-width: 960px) {
   .meeting-room-shell {
     padding: 18px;
-    padding-bottom: 144px;
+    padding-bottom: 180px;
   }
 
   .room-header {
@@ -579,16 +580,16 @@
     top: auto;
     left: 18px;
     right: 18px;
-    bottom: 114px;
+    bottom: calc(120px + env(safe-area-inset-bottom));
     width: auto;
-    max-height: 50vh;
+    max-height: 54vh;
   }
 }
 
 @media (max-width: 640px) {
   .meeting-room-shell {
     padding: 12px;
-    padding-bottom: 156px;
+    padding-bottom: 250px;
   }
 
   .meeting-state-card {
@@ -602,17 +603,22 @@
 
   #videos {
     grid-template-columns: 1fr !important;
-    grid-auto-rows: minmax(200px, auto);
+    grid-auto-rows: minmax(240px, auto);
     gap: 12px;
   }
 
+  .participant-grid.participants-1 {
+    grid-template-columns: 1fr;
+    justify-content: stretch;
+  }
+
   .video-tile {
-    min-height: 200px;
+    min-height: 240px;
     border-radius: 18px;
   }
 
   .video-tile-featured {
-    min-height: 38vh;
+    min-height: 42vh;
   }
 
   .waiting-room-row {
@@ -633,12 +639,14 @@
     width: 100%;
     border-radius: 22px;
     gap: 8px;
+    padding: 10px;
   }
 
   .control-button {
     flex: 1 1 calc(50% - 8px);
     justify-content: center;
     padding: 0.78rem 0.82rem;
+    min-height: 50px;
   }
 
   .control-label {
@@ -646,10 +654,10 @@
   }
 
   .chat-sidebar {
-    left: 12px;
-    right: 12px;
-    bottom: 108px;
-    max-height: 56vh;
+    left: 8px;
+    right: 8px;
+    bottom: calc(156px + env(safe-area-inset-bottom));
+    max-height: 48vh;
     border-radius: 22px;
   }
 

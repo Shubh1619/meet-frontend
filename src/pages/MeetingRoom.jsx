@@ -73,13 +73,13 @@ export default function MeetingRoom() {
 
   useEffect(() => {
     const nav = document.querySelector("nav");
-    if (isLoggedIn && nav) {
+    if (nav) {
       nav.style.display = "none";
       return () => {
         nav.style.display = "";
       };
     }
-  }, [isLoggedIn]);
+  }, []);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -251,11 +251,27 @@ export default function MeetingRoom() {
       if (exists) {
         return prev.map((p) => (
           p.id === "you"
-            ? { ...p, name: displayName, stream }
+            ? {
+                ...p,
+                name: displayName,
+                stream,
+                audioEnabled: stream.getAudioTracks()[0]?.enabled ?? true,
+                videoEnabled: stream.getVideoTracks()[0]?.enabled ?? true,
+              }
             : p
         ));
       } else {
-        return [...prev, { id: "you", name: displayName, stream, audioEnabled: true, videoEnabled: true, isLocal: true }];
+        return [
+          ...prev,
+          {
+            id: "you",
+            name: displayName,
+            stream,
+            audioEnabled: stream.getAudioTracks()[0]?.enabled ?? true,
+            videoEnabled: stream.getVideoTracks()[0]?.enabled ?? true,
+            isLocal: true,
+          },
+        ];
       }
     });
   }, [myName]);
@@ -389,12 +405,31 @@ export default function MeetingRoom() {
 
     pc.ontrack = (e) => {
       const stream = e.streams[0];
+      const nextAudioEnabled = typeof audioEnabled === "boolean"
+        ? audioEnabled
+        : (stream.getAudioTracks()[0]?.enabled ?? true);
+      const nextVideoEnabled = typeof videoEnabled === "boolean"
+        ? videoEnabled
+        : (stream.getVideoTracks()[0]?.enabled ?? true);
       setParticipants((prev) => {
         const exists = prev.find((p) => p.id === remoteId);
         if (exists) {
-          return prev.map((p) => (p.id === remoteId ? { ...p, stream, audioEnabled, videoEnabled } : p));
+          return prev.map((p) => (
+            p.id === remoteId
+              ? { ...p, stream, audioEnabled: nextAudioEnabled, videoEnabled: nextVideoEnabled }
+              : p
+          ));
         } else {
-          return [...prev, { id: remoteId, name: remoteName, stream, audioEnabled, videoEnabled }];
+          return [
+            ...prev,
+            {
+              id: remoteId,
+              name: remoteName,
+              stream,
+              audioEnabled: nextAudioEnabled,
+              videoEnabled: nextVideoEnabled,
+            },
+          ];
         }
       });
       monitorAudioLevel(stream, remoteId);
