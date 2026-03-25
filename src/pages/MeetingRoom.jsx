@@ -105,8 +105,44 @@ export default function MeetingRoom() {
     if (!id) return;
     setActiveSpeakerId(id);
   };
-  const toggleMic = () => { };
-  const toggleCamera = () => { };
+
+  const sendStateUpdate = () => {
+    const local = participants.find((p) => p.id === "you");
+    if (!local) return;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: "update-state",
+        id: "you",
+        audioEnabled: local.audioEnabled,
+        videoEnabled: local.videoEnabled,
+      }));
+    }
+  };
+
+  const toggleMic = () => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const track = stream.getAudioTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    setParticipants((prev) =>
+      prev.map((p) => (p.id === "you" ? { ...p, audioEnabled: track.enabled } : p))
+    );
+    sendStateUpdate();
+  };
+
+  const toggleCamera = () => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    setParticipants((prev) =>
+      prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: track.enabled } : p))
+    );
+    sendStateUpdate();
+  };
+
   const toggleScreenShare = () => setIsScreenSharing((prev) => !prev);
   const startRecording = () => {
     setIsRecording(true);
@@ -198,6 +234,21 @@ export default function MeetingRoom() {
           });
           return;
 
+        case "user-joined":
+          if (msg.id === myId.current) return;
+          setParticipants((prev) => {
+            if (prev.some((p) => p.id === msg.id)) return prev;
+            return [...prev, { id: msg.id, name: msg.name, isLocal: false, audioEnabled: true, videoEnabled: true }];
+          });
+
+          if (!pcsRef.current[msg.id]) {
+            const peer = createPeerConnection(msg.id, msg.name, true, true);
+            const offer = await peer.createOffer();
+            await peer.setLocalDescription(offer);
+            wsRef.current?.send(JSON.stringify({ ...peer.localDescription.toJSON(), from: myId.current, to: msg.id, name: myName }));
+          }
+          return;
+
         case "waiting":
           setIsInWaitingRoom(true);
           setWaitMessage(msg.message || "Waiting for host approval...");
@@ -215,6 +266,16 @@ export default function MeetingRoom() {
           setSetupVisible(true);
           setRoomVisible(false);
           setWaitMessage("");
+          return;
+
+        case "update-state":
+          setParticipants((prev) =>
+            prev.map((p) =>
+              p.id === msg.id
+                ? { ...p, audioEnabled: msg.audioEnabled, videoEnabled: msg.videoEnabled }
+                : p
+            )
+          );
           return;
 
         case "join": {
