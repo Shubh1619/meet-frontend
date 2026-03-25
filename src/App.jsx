@@ -26,7 +26,6 @@ export default function App() {
 
   const publicRoutes = ["/", "/login", "/register"];
   const isMeetingRoom = location.pathname.startsWith("/meeting/");
-
   const usePublicNavbar = publicRoutes.includes(location.pathname) || !token || isMeetingRoom;
 
   return (
@@ -35,67 +34,61 @@ export default function App() {
 
       <main className="main-content">
         <Routes>
-          {/* Public */}
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-
-          {/* Meeting Room - PUBLIC (no login required) */}
           <Route path="/meeting/:roomId" element={<MeetingRoom />} />
 
-          {/* Protected */}
           <Route
             path="/dashboard"
-            element={
+            element={(
               <ProtectedRoute>
                 <Dashboard />
               </ProtectedRoute>
-            }
+            )}
           />
 
           <Route
             path="/schedule"
-            element={
+            element={(
               <ProtectedRoute>
                 <ScheduleMeeting />
               </ProtectedRoute>
-            }
+            )}
           />
 
           <Route
             path="/instant"
-            element={
+            element={(
               <ProtectedRoute>
                 <InstantMeeting />
               </ProtectedRoute>
-            }
+            )}
           />
 
           <Route
             path="/join"
-            element={
+            element={(
               <ProtectedRoute>
                 <JoinMeeting />
               </ProtectedRoute>
-            }
+            )}
           />
 
-          {/* Profile Page Route */}
           <Route
             path="/profile"
-            element={
+            element={(
               <ProtectedRoute>
                 <Profile />
               </ProtectedRoute>
-            }
+            )}
           />
 
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
 
-      <footer className="footer">All rights reserved © Meetify</footer>
+      {!isMeetingRoom && <footer className="footer">All rights reserved © Meetify</footer>}
     </div>
   );
 }
