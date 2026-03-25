@@ -90,8 +90,8 @@ export default function MeetingRoom() {
     if (!id) return;
     setActiveSpeakerId(id);
   };
-  const toggleMic = () => {};
-  const toggleCamera = () => {};
+  const toggleMic = () => { };
+  const toggleCamera = () => { };
   const toggleScreenShare = () => setIsScreenSharing((prev) => !prev);
   const startRecording = () => {
     setIsRecording(true);
@@ -148,9 +148,11 @@ export default function MeetingRoom() {
   // --- WebSocket ---
   const connectWebSocket = (room) => {
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsProtocol}//${window.location.host}/ws/${room}`;
+    // With this:
+    const WS_SERVER = import.meta.env.VITE_WS_URL;
+    const wsUrl = `${WS_SERVER}/ws/${room}`;
     const socket = new WebSocket(wsUrl);
-    wsRef.current = socket;
+    wsRef.current = socket; 
 
     socket.onopen = () => {
       socket.send(
@@ -245,127 +247,127 @@ export default function MeetingRoom() {
           </div>
           <div className="security-badge">
             <i className="fas fa-shield-alt"></i>
-                     <span>End-to-End Encrypted</span>
+            <span>End-to-End Encrypted</span>
+          </div>
+          <input
+            type="text"
+            id="nameInput"
+            placeholder="Enter Your Name"
+            value={myName}
+            onChange={(e) => setMyName(e.target.value)}
+          />
+          <button id="joinBtn" onClick={() => joinCall("default-room", myName || "Guest")}>
+            <i className="fas fa-sign-in-alt"></i>
+            <span>Join Meeting</span>
+          </button>
         </div>
-        <input
-          type="text"
-          id="nameInput"
-          placeholder="Enter Your Name"
-          value={myName}
-          onChange={(e) => setMyName(e.target.value)}
-        />
-        <button id="joinBtn" onClick={() => joinCall("default-room", myName || "Guest")}>
-          <i className="fas fa-sign-in-alt"></i>
-          <span>Join Meeting</span>
-        </button>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-if (roomVisible) {
-  return (
-    <div id="room">
-      {/* Header */}
-      <div className="room-header">
-        <div className="room-info">
-          <div className="room-name">
-            <i className="fas fa-door-open"></i>
-            <span>{roomName}</span>
-          </div>
-          <div className="participant-count">
-            <i className="fas fa-users"></i>
-            <span>{participants.length} participant(s)</span>
-          </div>
-          {isRecording && (
-            <div className="recording-indicator">
-              <i className="fas fa-circle"></i>
-              <span>Recording {recordingTimer}</span>
+  if (roomVisible) {
+    return (
+      <div id="room">
+        {/* Header */}
+        <div className="room-header">
+          <div className="room-info">
+            <div className="room-name">
+              <i className="fas fa-door-open"></i>
+              <span>{roomName}</span>
             </div>
-          )}
+            <div className="participant-count">
+              <i className="fas fa-users"></i>
+              <span>{participants.length} participant(s)</span>
+            </div>
+            {isRecording && (
+              <div className="recording-indicator">
+                <i className="fas fa-circle"></i>
+                <span>Recording {recordingTimer}</span>
+              </div>
+            )}
+          </div>
+          <div className="security-indicator">
+            <i className="fas fa-lock"></i>
+            <span>Secured Connection</span>
+          </div>
         </div>
-        <div className="security-indicator">
-          <i className="fas fa-lock"></i>
-          <span>Secured Connection</span>
+
+        {/* Main Content */}
+        <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
+          <div id="videos">
+            {participants
+              .filter((p) => !pinnedParticipantId || p.id === pinnedParticipantId)
+              .map((p) => (
+                <VideoTile
+                  key={p.id}
+                  {...p}
+                  captions={captions[p.id]}
+                  isPinned={p.id === pinnedParticipantId}
+                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                />
+              ))}
+          </div>
+          <div id="pinned-column">
+            {participants
+              .filter((p) => pinnedParticipantId && p.id !== pinnedParticipantId)
+              .map((p) => (
+                <VideoTile
+                  key={p.id}
+                  {...p}
+                  captions={captions[p.id]}
+                  isPinned={false}
+                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                />
+              ))}
+          </div>
         </div>
+
+        {/* Participants strip for screen share */}
+        <div id="participants-strip">
+          {isScreenSharing &&
+            participants
+              .filter((p) => !p.isLocal)
+              .map((p) => (
+                <VideoTile
+                  key={p.id}
+                  {...p}
+                  captions={captions[p.id]}
+                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                />
+              ))}
+        </div>
+
+        {/* Controls */}
+        <ControlsBar
+          onToggleMic={() => toggleMic()}
+          onToggleCamera={() => toggleCamera()}
+          onShareScreen={() => toggleScreenShare()}
+          onRecord={() => (isRecording ? stopRecording() : setRecordingModalOpen(true))}
+          onCaptions={() => setCaptionsEnabled(!captionsEnabled)}
+          onChat={() => setChatOpen(!chatOpen)}
+          onLeave={() => leaveMeeting()}
+        />
+
+        {/* Chat Sidebar */}
+        <ChatSidebar
+          isOpen={chatOpen}
+          messages={messages}
+          onClose={() => setChatOpen(false)}
+          msgInput={msgInput}
+          setMsgInput={setMsgInput}
+          sendMessage={() => sendChatMessage(msgInput)}
+        />
+
+        {/* Recording Modal */}
+        <RecordingModal
+          isOpen={recordingModalOpen}
+          onClose={() => setRecordingModalOpen(false)}
+          onSelectOption={(type) => console.log("Selected:", type)}
+          onStartRecording={() => startRecording()}
+        />
       </div>
+    );
+  }
 
-      {/* Main Content */}
-      <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
-        <div id="videos">
-          {participants
-            .filter((p) => !pinnedParticipantId || p.id === pinnedParticipantId)
-            .map((p) => (
-              <VideoTile
-                key={p.id}
-                {...p}
-                captions={captions[p.id]}
-                isPinned={p.id === pinnedParticipantId}
-                onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
-              />
-            ))}
-        </div>
-        <div id="pinned-column">
-          {participants
-            .filter((p) => pinnedParticipantId && p.id !== pinnedParticipantId)
-            .map((p) => (
-              <VideoTile
-                key={p.id}
-                {...p}
-                captions={captions[p.id]}
-                isPinned={false}
-                onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
-              />
-            ))}
-        </div>
-      </div>
-
-      {/* Participants strip for screen share */}
-      <div id="participants-strip">
-        {isScreenSharing &&
-          participants
-            .filter((p) => !p.isLocal)
-            .map((p) => (
-              <VideoTile
-                key={p.id}
-                {...p}
-                captions={captions[p.id]}
-                onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
-              />
-            ))}
-      </div>
-
-      {/* Controls */}
-      <ControlsBar
-        onToggleMic={() => toggleMic()}
-        onToggleCamera={() => toggleCamera()}
-        onShareScreen={() => toggleScreenShare()}
-        onRecord={() => (isRecording ? stopRecording() : setRecordingModalOpen(true))}
-        onCaptions={() => setCaptionsEnabled(!captionsEnabled)}
-        onChat={() => setChatOpen(!chatOpen)}
-        onLeave={() => leaveMeeting()}
-      />
-
-      {/* Chat Sidebar */}
-      <ChatSidebar
-        isOpen={chatOpen}
-        messages={messages}
-        onClose={() => setChatOpen(false)}
-        msgInput={msgInput}
-        setMsgInput={setMsgInput}
-        sendMessage={() => sendChatMessage(msgInput)}
-      />
-
-      {/* Recording Modal */}
-      <RecordingModal
-        isOpen={recordingModalOpen}
-        onClose={() => setRecordingModalOpen(false)}
-        onSelectOption={(type) => console.log("Selected:", type)}
-        onStartRecording={() => startRecording()}
-      />
-    </div>
-  );
-}
-
-return null;
+  return null;
 }
