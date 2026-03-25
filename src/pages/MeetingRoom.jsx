@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useParams } from "react-router-dom";
 import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
 import RecordingModal from "./RecordingModal";
@@ -7,6 +8,7 @@ import "./MeetingRoom.css";
 
 export default function MeetingRoom() {
   // --- State ---
+  const { roomId } = useParams();
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
   const isLoggedIn = Boolean(localStorage.getItem("token"));
 
@@ -46,50 +48,18 @@ export default function MeetingRoom() {
     }
   }, []);
 
-  // --- Join Call ---
-  const joinCall = async (room, name) => {
-    const resolvedName = isLoggedIn ? myName : name || myName || "Guest";
-    setMyName(resolvedName);
-    setSetupVisible(false);
-
-    if (isLoggedIn) {
-      setRoomVisible(true);
-      setIsInWaitingRoom(false);
-      console.log("Logged in user, using profile identity:", resolvedName);
-    } else {
-      setRoomVisible(false);
-      setIsInWaitingRoom(true);
-      setWaitMessage("Waiting for host approval...");
+  useEffect(() => {
+    const nav = document.querySelector("nav");
+    if (isLoggedIn && nav) {
+      nav.style.display = "none";
+      return () => {
+        nav.style.display = "";
+      };
     }
-
-    setRoomName(room);
-
-    sessionStorage.setItem("room", room);
-    sessionStorage.setItem("name", name);
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      cameraStreamRef.current = stream;
-
-      const savedMic = sessionStorage.getItem("micMuted") === "true";
-      const savedCam = sessionStorage.getItem("cameraOff") === "true";
-
-      if (stream.getAudioTracks()[0] && savedMic) stream.getAudioTracks()[0].enabled = false;
-      if (stream.getVideoTracks()[0] && savedCam) stream.getVideoTracks()[0].enabled = false;
-
-      setLocalStreamHandler(stream);
-      monitorAudioLevel(stream, "localVideoContainer");
-    } catch (e) {
-      console.error("Media error", e);
-      alert("Could not access camera and microphone.");
-      return;
-    }
-
-    connectWebSocket(room);
-  };
+  }, [isLoggedIn]);
 
   // --- Local Stream Handler ---
-  const setLocalStreamHandler = (stream) => {
+  function setLocalStreamHandler(stream) {
     localStreamRef.current = stream;
     setParticipants((prev) => {
       const exists = prev.find((p) => p.id === "you");
@@ -99,14 +69,14 @@ export default function MeetingRoom() {
         return [...prev, { id: "you", name: myName, stream, audioEnabled: true, videoEnabled: true, isLocal: true }];
       }
     });
-  };
+  }
 
-  const monitorAudioLevel = (stream, id) => {
+  function monitorAudioLevel(stream, id) {
     if (!id) return;
     setActiveSpeakerId(id);
-  };
+  }
 
-  const sendStateUpdate = () => {
+  function sendStateUpdate() {
     const local = participants.find((p) => p.id === "you");
     if (!local) return;
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -117,9 +87,9 @@ export default function MeetingRoom() {
         videoEnabled: local.videoEnabled,
       }));
     }
-  };
+  }
 
-  const toggleMic = () => {
+  function toggleMic() {
     const stream = localStreamRef.current;
     if (!stream) return;
     const track = stream.getAudioTracks()[0];
@@ -129,9 +99,9 @@ export default function MeetingRoom() {
       prev.map((p) => (p.id === "you" ? { ...p, audioEnabled: track.enabled } : p))
     );
     sendStateUpdate();
-  };
+  }
 
-  const toggleCamera = () => {
+  function toggleCamera() {
     const stream = localStreamRef.current;
     if (!stream) return;
     const track = stream.getVideoTracks()[0];
@@ -141,7 +111,7 @@ export default function MeetingRoom() {
       prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: track.enabled } : p))
     );
     sendStateUpdate();
-  };
+  }
 
   const toggleScreenShare = () => setIsScreenSharing((prev) => !prev);
   const startRecording = () => {
@@ -161,7 +131,7 @@ export default function MeetingRoom() {
   };
 
   // --- Peer Connection ---
-  const createPeerConnection = (remoteId, remoteName, audioEnabled, videoEnabled) => {
+  function createPeerConnection(remoteId, remoteName, audioEnabled, videoEnabled) {
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -189,15 +159,15 @@ export default function MeetingRoom() {
 
     pc.onicecandidate = (e) => {
       if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: "candidate", candidate: e.candidate, from: myId, to: remoteId }));
+        wsRef.current.send(JSON.stringify({ type: "candidate", candidate: e.candidate, from: myId.current, to: remoteId }));
       }
     };
 
     return pc;
-  };
+  }
 
   // --- WebSocket ---
-  const connectWebSocket = (room) => {
+  function connectWebSocket(room) {
     const WS_SERVER = import.meta.env.VITE_WS_URL;
     const wsUrl = `${WS_SERVER}/ws/${room}`;
     const socket = new WebSocket(wsUrl);
@@ -281,14 +251,14 @@ export default function MeetingRoom() {
         case "join": {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId, to: msg.from, name: myName }));
+          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: myName }));
           break;
         }
         case "offer": {
           await pc.setRemoteDescription(new RTCSessionDescription(msg));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId, to: msg.from, name: myName }));
+          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: myName }));
           break;
         }
         case "answer":
@@ -316,6 +286,58 @@ export default function MeetingRoom() {
       setTimeout(() => connectWebSocket(room), 5000);
     };
   };
+
+  // --- Join Call ---
+  const joinCall = async (room = roomId || "default-room", name) => {
+    const resolvedName = isLoggedIn ? (storedUser?.name || myName || "Host") : (name || myName || "Guest");
+    setMyName(resolvedName);
+    setSetupVisible(false);
+
+    if (isLoggedIn) {
+      setRoomVisible(true);
+      setIsInWaitingRoom(false);
+      console.log("Host auto join, using profile identity:", resolvedName);
+    } else {
+      setRoomVisible(false);
+      setIsInWaitingRoom(true);
+      setWaitMessage("Waiting for host approval...");
+    }
+
+    setRoomName(room);
+
+    sessionStorage.setItem("room", room);
+    sessionStorage.setItem("name", name);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      cameraStreamRef.current = stream;
+
+      const savedMic = sessionStorage.getItem("micMuted") === "true";
+      const savedCam = sessionStorage.getItem("cameraOff") === "true";
+
+      if (stream.getAudioTracks()[0] && savedMic) stream.getAudioTracks()[0].enabled = false;
+      if (stream.getVideoTracks()[0] && savedCam) stream.getVideoTracks()[0].enabled = false;
+
+      setLocalStreamHandler(stream);
+      monitorAudioLevel(stream, "localVideoContainer");
+    } catch (e) {
+      console.error("Media error", e);
+      alert("Could not access camera and microphone.");
+      return;
+    }
+
+    connectWebSocket(room);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (isLoggedIn && roomId) {
+      const timer = setTimeout(() => {
+        joinCall(roomId, storedUser?.name || "Host");
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoggedIn, roomId, storedUser, joinCall]);
 
   const approveGuest = (client_id) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -352,7 +374,7 @@ export default function MeetingRoom() {
   }, [captionsEnabled, activeSpeakerId]);
 
   // --- Render ---
-  if (setupVisible) {
+  if (setupVisible && !isLoggedIn) {
     return (
       <div id="setup">
         <div className="setup-container">
@@ -371,7 +393,7 @@ export default function MeetingRoom() {
             value={myName}
             onChange={(e) => setMyName(e.target.value)}
           />
-          <button id="joinBtn" onClick={() => joinCall("default-room", myName || "Guest")}>
+          <button id="joinBtn" onClick={() => joinCall(roomId || "default-room", myName || "Guest")}>
             <i className="fas fa-sign-in-alt"></i>
             <span>Join Meeting</span>
           </button>
