@@ -26,9 +26,7 @@ export default function MeetingRoom() {
   const [guestSessionId, setGuestSessionId] = useState("");
   const [isHostUser, setIsHostUser] = useState(false);
   const [hostAccessResolved, setHostAccessResolved] = useState(!isLoggedIn);
-  const [myName, setMyName] = useState(
-    initialStoredUser?.name || sessionStorage.getItem(`meeting-guest-name:${roomId}`) || "Guest"
-  );
+  const [myName, setMyName] = useState(initialStoredUser?.name || sessionStorage.getItem(`meeting-guest-name:${roomId}`)  );
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [waitingUsers, setWaitingUsers] = useState([]);
   const [waitMessage, setWaitMessage] = useState("");
@@ -43,8 +41,10 @@ export default function MeetingRoom() {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   const [recordingModalOpen, setRecordingModalOpen] = useState(false);
+  const [recordingModalMode, setRecordingModalMode] = useState("start");
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTimer, setRecordingTimer] = useState("00:00");
+  const [recordedBlobUrl, setRecordedBlobUrl] = useState("");
 
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [captions, setCaptions] = useState({});
@@ -60,6 +60,10 @@ export default function MeetingRoom() {
   const hasJoinedRef = useRef(false);
   const reconnectTimeoutRef = useRef(null);
   const reconnectFnRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordingStreamRef = useRef(null);
+  const recordingChunksRef = useRef([]);
+  const recordingStartedAtRef = useRef(null);
 
   useEffect(() => {
     if (!roomId) return;
@@ -407,11 +411,74 @@ export default function MeetingRoom() {
       screenStreamRef.current = null;
     }
   }, [isScreenSharing, myName, setLocalStreamHandler]);
-  const startRecording = () => {
-    setIsRecording(true);
+  const startRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+      recordingStreamRef.current = stream;
+      recordingChunksRef.current = [];
+
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          recordingChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        setIsRecording(false);
+        setRecordingTimer("00:00");
+
+        const blob = new Blob(recordingChunksRef.current, { type: "video/webm" });
+        if (blob.size > 0) {
+          const url = URL.createObjectURL(blob);
+          setRecordedBlobUrl((prevUrl) => {
+            if (prevUrl) URL.revokeObjectURL(prevUrl);
+            return url;
+          });
+          setRecordingModalMode("saved");
+          setRecordingModalOpen(true);
+        }
+
+        if (recordingStreamRef.current) {
+          recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+          recordingStreamRef.current = null;
+        }
+      };
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => {
+          const activeRecorder = mediaRecorderRef.current;
+          if (activeRecorder && activeRecorder.state !== "inactive") {
+            activeRecorder.stop();
+          }
+        };
+      }
+
+      recorder.start(1000);
+      recordingStartedAtRef.current = Date.now();
+      setIsRecording(true);
+      setRecordingTimer("00:00");
+      setRecordingModalOpen(false);
+      setRecordingModalMode("start");
+    } catch (error) {
+      console.error("Unable to start recording:", error);
+      alert("Recording did not start. Please choose what to record and confirm.");
+    }
+  }, []);
+
+  const stopRecording = useCallback(() => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop();
+      return;
+    }
+
+    setIsRecording(false);
     setRecordingTimer("00:00");
-  };
-  const stopRecording = () => setIsRecording(false);
+  }, []);
   const leaveMeeting = useCallback((shouldRedirect = true) => {
     hasJoinedRef.current = false;
 
@@ -439,6 +506,13 @@ export default function MeetingRoom() {
     if (screenStreamRef.current) {
       screenStreamRef.current.getTracks().forEach((track) => track.stop());
       screenStreamRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+    }
+    if (recordingStreamRef.current) {
+      recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current = null;
     }
 
     localStreamRef.current = null;
@@ -860,6 +934,13 @@ export default function MeetingRoom() {
         screenStreamRef.current.getTracks().forEach((track) => track.stop());
         screenStreamRef.current = null;
       }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      if (recordingStreamRef.current) {
+        recordingStreamRef.current.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+      }
     };
   }, []);
 
@@ -868,6 +949,30 @@ export default function MeetingRoom() {
       setUnreadChatCount(0);
     }
   }, [chatOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (recordedBlobUrl) {
+        URL.revokeObjectURL(recordedBlobUrl);
+      }
+    };
+  }, [recordedBlobUrl]);
+
+  useEffect(() => {
+    if (!isRecording) return undefined;
+
+    const updateTimer = () => {
+      const startedAt = recordingStartedAtRef.current || Date.now();
+      const elapsedSec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      const minutes = String(Math.floor(elapsedSec / 60)).padStart(2, "0");
+      const seconds = String(elapsedSec % 60).padStart(2, "0");
+      setRecordingTimer(`${minutes}:${seconds}`);
+    };
+
+    updateTimer();
+    const timerId = setInterval(updateTimer, 1000);
+    return () => clearInterval(timerId);
+  }, [isRecording]);
 
   const approveGuest = (client_id) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -905,6 +1010,37 @@ export default function MeetingRoom() {
 
   const localParticipant = participants.find((participant) => participant.id === "you");
   const waitingCount = waitingUsers.length;
+
+  const downloadRecording = useCallback(async () => {
+    if (!recordedBlobUrl) return;
+    const anchor = document.createElement("a");
+    anchor.href = recordedBlobUrl;
+    anchor.download = `meeting-recording-${new Date().toISOString().replace(/[:.]/g, "-")}.webm`;
+    anchor.click();
+  }, [recordedBlobUrl]);
+
+  const shareRecording = useCallback(async () => {
+    if (!recordedBlobUrl) return;
+    try {
+      const response = await fetch(recordedBlobUrl);
+      const blob = await response.blob();
+      const file = new File([blob], "meeting-recording.webm", { type: "video/webm" });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: "Meeting Recording",
+          text: "Sharing my meeting recording",
+          files: [file],
+        });
+      } else {
+        await navigator.clipboard.writeText(recordedBlobUrl);
+        alert("Share is not available on this device. Recording link copied.");
+      }
+    } catch (error) {
+      console.error("Share failed:", error);
+      alert("Unable to share recording right now.");
+    }
+  }, [recordedBlobUrl]);
 
   // --- Render ---
   if ((isLoggedIn && !profileReady) || !meetingReady || !hostAccessResolved) {
@@ -1097,11 +1233,30 @@ export default function MeetingRoom() {
           onToggleMic={() => toggleMic()}
           onToggleCamera={() => toggleCamera()}
           onShareScreen={() => toggleScreenShare()}
-          onRecord={() => (isRecording ? stopRecording() : setRecordingModalOpen(true))}
+          onRecord={() => {
+            if (isRecording) {
+              stopRecording();
+              return;
+            }
+            setRecordingModalMode("start");
+            setRecordingModalOpen(true);
+          }}
           onCaptions={() => setCaptionsEnabled(!captionsEnabled)}
           onChat={() => setChatOpen(!chatOpen)}
           onLeave={() => leaveMeeting()}
         />
+
+        {isRecording && (
+          <div className="recording-status-banner">
+            <div className="recording-status-title">Recording in progress...</div>
+            <div className="recording-status-subtext">
+              Your screen is being recorded. Click Stop Recording when you are done.
+            </div>
+            <button type="button" className="recording-stop-button" onClick={stopRecording}>
+              Stop Recording
+            </button>
+          </div>
+        )}
 
         {/* Chat Sidebar */}
         <ChatSidebar
@@ -1117,8 +1272,10 @@ export default function MeetingRoom() {
         <RecordingModal
           isOpen={recordingModalOpen}
           onClose={() => setRecordingModalOpen(false)}
-          onSelectOption={(type) => console.log("Selected:", type)}
-          onStartRecording={() => startRecording()}
+          mode={recordingModalMode}
+          onStartRecording={startRecording}
+          onDownload={downloadRecording}
+          onShare={shareRecording}
         />
       </div>
     );

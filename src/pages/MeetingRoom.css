@@ -585,6 +585,44 @@
   margin-bottom: 16px;
 }
 
+.recording-description {
+  color: #475569;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.recording-instructions {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.recording-instructions h4 {
+  margin: 0 0 8px;
+  color: #1e293b;
+}
+
+.recording-instructions ol {
+  margin: 0;
+  padding-left: 18px;
+  color: #475569;
+}
+
+.recording-instructions li + li {
+  margin-top: 4px;
+}
+
+.recording-privacy-note {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  color: #0f5132;
+  background: rgba(220, 252, 231, 0.9);
+  border: 1px solid rgba(134, 239, 172, 0.55);
+}
+
 .recording-options {
   display: grid;
   gap: 12px;
@@ -619,6 +657,41 @@
 
 .recording-start {
   background: linear-gradient(135deg, #2563eb, #3b82f6);
+}
+
+.recording-share {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+}
+
+.recording-status-banner {
+  position: fixed;
+  right: 18px;
+  bottom: calc(132px + env(safe-area-inset-bottom));
+  z-index: 19;
+  width: min(360px, calc(100vw - 24px));
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  box-shadow: 0 16px 40px rgba(2, 8, 23, 0.36);
+}
+
+.recording-status-title {
+  font-weight: 700;
+  color: #fecaca;
+  margin-bottom: 6px;
+}
+
+.recording-status-subtext {
+  font-size: 0.9rem;
+  color: #dbeafe;
+}
+
+.recording-stop-button {
+  margin-top: 10px;
+  width: 100%;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
 @media (max-width: 960px) {
@@ -752,7 +825,15 @@
   }
 
   .recording-cancel,
-  .recording-start {
+  .recording-start,
+  .recording-share {
     width: 100%;
+  }
+
+  .recording-status-banner {
+    left: 12px;
+    right: 12px;
+    bottom: calc(220px + env(safe-area-inset-bottom));
+    width: auto;
   }
 }
