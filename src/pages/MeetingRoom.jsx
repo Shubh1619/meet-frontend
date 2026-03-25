@@ -823,17 +823,18 @@ export default function MeetingRoom() {
       <div id="setup" className="meeting-room-shell">
         <div className="setup-container meeting-state-card">
           <div className="setup-header">
-            <i className="fas fa-video"></i>
-            <h2>AI for IA Meeting</h2>
+            <h2>Join Meeting</h2>
+            <p className="setup-subtitle">Enter your name to request access from the host.</p>
           </div>
           <div className="security-badge">
-            <i className="fas fa-shield-alt"></i>
-            <span>End-to-End Encrypted</span>
+            <span>Secured connection</span>
+            <span className="security-separator">|</span>
+            <span>Waiting room enabled</span>
           </div>
           <input
             type="text"
             id="nameInput"
-            placeholder="Enter Your Name"
+            placeholder="Enter your display name"
             value={myName}
             onChange={(e) => setMyName(e.target.value)}
           />
@@ -848,8 +849,7 @@ export default function MeetingRoom() {
               joinCall(roomId || "default-room", trimmedName);
             }}
           >
-            <i className="fas fa-sign-in-alt"></i>
-            <span>Join Meeting</span>
+            Request to Join
           </button>
         </div>
       </div>
