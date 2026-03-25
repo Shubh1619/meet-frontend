@@ -474,6 +474,7 @@ export default function MeetingRoom() {
           from: myId.current,
           name: participantName,
           session_id: sessionId,
+          token: hostMode ? (localStorage.getItem("token") || "") : "",
           audioEnabled: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? true,
           videoEnabled: localStreamRef.current?.getVideoTracks()[0]?.enabled ?? true,
         })
@@ -675,7 +676,7 @@ export default function MeetingRoom() {
     const resolvedName = isLoggedIn
       ? (profileUser?.name || myName || "Host")
       : (name || myName || "Guest");
-    const hostMode = Boolean(isHostUser && hostSessionId);
+    const hostMode = Boolean(isHostUser);
     let sessionId = hostMode ? hostSessionId : guestSessionId;
     setMyName(resolvedName);
     setSetupVisible(false);
