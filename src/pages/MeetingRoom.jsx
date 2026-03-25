@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { FaDoorOpen, FaLock, FaUsers, FaHourglassHalf } from "react-icons/fa";
 import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
@@ -10,6 +10,7 @@ import "./MeetingRoom.css";
 export default function MeetingRoom() {
   // --- State ---
   const { roomId } = useParams();
+  const navigate = useNavigate();
   const initialStoredUser = JSON.parse(localStorage.getItem("user") || "null");
   const isLoggedIn = Boolean(localStorage.getItem("token"));
 
@@ -308,7 +309,7 @@ export default function MeetingRoom() {
     setRecordingTimer("00:00");
   };
   const stopRecording = () => setIsRecording(false);
-  const leaveMeeting = () => {
+  const leaveMeeting = (shouldRedirect = true) => {
     hasJoinedRef.current = false;
 
     if (reconnectTimeoutRef.current) {
@@ -342,6 +343,14 @@ export default function MeetingRoom() {
     setParticipants([]);
     setPinnedParticipantId(null);
     setIsInWaitingRoom(false);
+
+    if (shouldRedirect) {
+      if (isHostUser) {
+        navigate("/dashboard");
+      } else {
+        navigate("/login");
+      }
+    }
   };
   const sendChatMessage = (message) => {
     const trimmedMessage = message.trim();
@@ -669,6 +678,8 @@ export default function MeetingRoom() {
   }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId, guestSessionId, ensureGuestSession]);
 
   useEffect(() => {
+    if (!isLoggedIn) return;
+
     if (roomId && profileReady && meetingReady && hostAccessResolved) {
       const timer = setTimeout(() => {
         if (isHostUser && !hostSessionId) return;
@@ -677,7 +688,7 @@ export default function MeetingRoom() {
 
       return () => clearTimeout(timer);
     }
-  }, [roomId, profileReady, meetingReady, hostAccessResolved, profileUser?.name, myName, joinCall, isHostUser, hostSessionId]);
+  }, [roomId, isLoggedIn, profileReady, meetingReady, hostAccessResolved, profileUser?.name, myName, joinCall, isHostUser, hostSessionId]);
 
   useEffect(() => {
     return () => {
@@ -782,7 +793,17 @@ export default function MeetingRoom() {
             value={myName}
             onChange={(e) => setMyName(e.target.value)}
           />
-          <button id="joinBtn" onClick={() => joinCall(roomId || "default-room", myName || "Guest")}>
+          <button
+            id="joinBtn"
+            onClick={() => {
+              const trimmedName = (myName || "").trim();
+              if (!trimmedName) {
+                alert("Please enter your name to continue.");
+                return;
+              }
+              joinCall(roomId || "default-room", trimmedName);
+            }}
+          >
             <i className="fas fa-sign-in-alt"></i>
             <span>Join Meeting</span>
           </button>
