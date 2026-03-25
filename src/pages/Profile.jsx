@@ -14,10 +14,8 @@ export default function Profile() {
     if (!localStorage.getItem("token")) {
       navigate("/login");
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [navigate]);
 
-  // Fetch user data
   useEffect(() => {
     async function fetchUser() {
       try {
@@ -50,7 +48,6 @@ export default function Profile() {
     fetchUser();
   }, []);
 
-  // Get initials for avatar
   const getInitials = (name) => {
     if (!name) return "?";
     const parts = name.split(" ");
@@ -60,7 +57,6 @@ export default function Profile() {
     return name.substring(0, 2).toUpperCase();
   };
 
-  // Generate avatar color from name
   const getAvatarColor = (name) => {
     if (!name) return "#6759FF";
     const colors = ["#6759FF", "#FF6B6B", "#4ECDC4", "#FFE66D", "#95E1D3", "#F38181", "#AA96DA"];
@@ -74,11 +70,18 @@ export default function Profile() {
     navigate("/login");
   };
 
+  const cardBg = darkMode ? "#16213e" : "#fff";
+  const pageBg = darkMode ? "#1a1a2e" : "#F8F9FF";
+  const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
+  const mutedColor = darkMode ? "#9ca3af" : "#6b7280";
+  const softBg = darkMode ? "#101426" : "#F8F9FF";
+  const borderColor = darkMode ? "#2a3148" : "#eef1f6";
+
   if (loading) {
     return (
-      <div style={styles.container}>
-        <div style={styles.loadingCard}>
-          <div style={styles.spinner}></div>
+      <div style={{ ...styles.container, background: pageBg }}>
+        <div style={{ ...styles.loadingCard, background: cardBg, color: textColor }}>
+          <div style={styles.spinner} />
           <p>Loading profile...</p>
         </div>
       </div>
@@ -86,9 +89,8 @@ export default function Profile() {
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.profileCard}>
-        {/* Header with Avatar */}
+    <div style={{ ...styles.container, background: pageBg }}>
+      <div style={{ ...styles.profileCard, background: cardBg }}>
         <div style={styles.header}>
           <div style={{ ...styles.avatar, background: getAvatarColor(user?.name) }}>
             {getInitials(user?.name)}
@@ -97,121 +99,116 @@ export default function Profile() {
           <p style={styles.userEmail}>{user?.email}</p>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div style={styles.errorAlert}>
             {error}
           </div>
         )}
 
-        {/* Profile Info */}
-        <div style={styles.section}>
+        <div style={{ ...styles.section, borderBottom: `1px solid ${borderColor}` }}>
           <h3 style={styles.sectionTitle}>Profile Information</h3>
-          
-          <div style={styles.infoRow}>
-            <div style={styles.infoLabel}>
-              <span style={styles.infoIcon}>👤</span>
+
+          <div style={{ ...styles.responsiveRow, borderBottom: `1px solid ${borderColor}` }}>
+            <div style={{ ...styles.infoLabel, color: mutedColor }}>
+              <span style={styles.infoIcon}>ID</span>
               Full Name
             </div>
-            <div style={styles.infoValue}>{user?.name || "Not set"}</div>
+            <div style={{ ...styles.infoValue, color: textColor }}>{user?.name || "Not set"}</div>
           </div>
 
-          <div style={styles.infoRow}>
-            <div style={styles.infoLabel}>
-              <span style={styles.infoIcon}>✉️</span>
+          <div style={styles.responsiveRow}>
+            <div style={{ ...styles.infoLabel, color: mutedColor }}>
+              <span style={styles.infoIcon}>@</span>
               Email Address
             </div>
-            <div style={styles.infoValue}>{user?.email}</div>
+            <div style={{ ...styles.infoValue, color: textColor, overflowWrap: "anywhere" }}>{user?.email}</div>
           </div>
         </div>
 
-        {/* Settings */}
-        <div style={styles.section}>
+        <div style={{ ...styles.section, borderBottom: `1px solid ${borderColor}` }}>
           <h3 style={styles.sectionTitle}>Settings</h3>
-          
-          <div style={styles.settingRow}>
-            <div style={styles.settingLabel}>
-              <span style={styles.settingIcon}>🌙</span>
+
+          <div style={{ ...styles.responsiveRow, borderBottom: `1px solid ${borderColor}` }}>
+            <div style={{ ...styles.settingLabel, color: mutedColor }}>
+              <span style={styles.settingIcon}>DM</span>
               Dark Mode
             </div>
             <label style={styles.toggle}>
-              <input 
-                type="checkbox" 
-                checked={darkMode} 
+              <input
+                type="checkbox"
+                checked={darkMode}
                 onChange={toggleDarkMode}
                 style={styles.toggleInput}
               />
-              <span style={{ ...styles.toggleSlider, background: darkMode ? "#6759FF" : "#ddd" }}></span>
+              <span style={{ ...styles.toggleSlider, background: darkMode ? "#6759FF" : "#ddd" }} />
             </label>
           </div>
 
-          <div style={styles.settingRow}>
-            <div style={styles.settingLabel}>
-              <span style={styles.settingIcon}>🔔</span>
+          <div style={{ ...styles.responsiveRow, borderBottom: `1px solid ${borderColor}` }}>
+            <div style={{ ...styles.settingLabel, color: mutedColor }}>
+              <span style={styles.settingIcon}>NT</span>
               Notifications
             </div>
             <label style={styles.toggle}>
               <input type="checkbox" defaultChecked style={styles.toggleInput} />
-              <span style={styles.toggleSlider}></span>
+              <span style={styles.toggleSlider} />
             </label>
           </div>
 
-          <div style={styles.settingRow}>
-            <div style={styles.settingLabel}>
-              <span style={styles.settingIcon}>📧</span>
+          <div style={styles.responsiveRow}>
+            <div style={{ ...styles.settingLabel, color: mutedColor }}>
+              <span style={styles.settingIcon}>EM</span>
               Email Reminders
             </div>
             <label style={styles.toggle}>
               <input type="checkbox" defaultChecked style={styles.toggleInput} />
-              <span style={styles.toggleSlider}></span>
+              <span style={styles.toggleSlider} />
             </label>
           </div>
         </div>
 
-        {/* Quick Actions */}
-        <div style={styles.section}>
+        <div style={{ ...styles.section, borderBottom: `1px solid ${borderColor}` }}>
           <h3 style={styles.sectionTitle}>Quick Actions</h3>
-          
+
           <div style={styles.actionsGrid}>
-            <button style={styles.actionBtn} onClick={() => navigate("/instant")}>
-              <span style={styles.actionIcon}>⚡</span>
+            <button style={{ ...styles.actionBtn, background: softBg, color: textColor, border: `1px solid ${borderColor}` }} onClick={() => navigate("/instant")}>
+              <span style={styles.actionIcon}>IM</span>
               Instant Meeting
             </button>
-            
-            <button style={styles.actionBtn} onClick={() => navigate("/schedule")}>
-              <span style={styles.actionIcon}>📅</span>
+
+            <button style={{ ...styles.actionBtn, background: softBg, color: textColor, border: `1px solid ${borderColor}` }} onClick={() => navigate("/schedule")}>
+              <span style={styles.actionIcon}>SC</span>
               Schedule Meeting
             </button>
-            
-            <button style={styles.actionBtn} onClick={() => navigate("/dashboard")}>
-              <span style={styles.actionIcon}>🏠</span>
+
+            <button style={{ ...styles.actionBtn, background: softBg, color: textColor, border: `1px solid ${borderColor}` }} onClick={() => navigate("/dashboard")}>
+              <span style={styles.actionIcon}>DB</span>
               Dashboard
             </button>
           </div>
         </div>
 
-        {/* Danger Zone */}
         <div style={styles.dangerZone}>
           <h3 style={styles.dangerTitle}>Account</h3>
-          
+
           {!showLogoutConfirm ? (
-            <button 
+            <button
               style={styles.logoutBtn}
               onClick={() => setShowLogoutConfirm(true)}
             >
-              🚪 Logout
+              Logout
             </button>
           ) : (
             <div style={styles.confirmBox}>
               <p style={styles.confirmText}>Are you sure you want to logout?</p>
               <div style={styles.confirmBtns}>
-                <button 
+                <button
                   style={styles.confirmLogoutBtn}
                   onClick={handleLogout}
                 >
                   Yes, Logout
                 </button>
-                <button 
+                <button
                   style={styles.cancelBtn}
                   onClick={() => setShowLogoutConfirm(false)}
                 >
@@ -222,8 +219,7 @@ export default function Profile() {
           )}
         </div>
 
-        {/* Footer */}
-        <div style={styles.footer}>
+        <div style={{ ...styles.footer, background: softBg, color: mutedColor }}>
           <p>Meetify - AI Meeting Assistant</p>
           <p style={styles.version}>Version 1.0.0</p>
         </div>
@@ -234,9 +230,8 @@ export default function Profile() {
 
 const styles = {
   container: {
-    paddingTop: "5rem",
+    paddingTop: "5.75rem",
     minHeight: "calc(100vh - 60px)",
-    background: "#F8F9FF",
     display: "flex",
     justifyContent: "center",
     paddingBottom: "2rem",
@@ -245,10 +240,9 @@ const styles = {
     width: "100%",
   },
   profileCard: {
-    background: "#fff",
     borderRadius: 16,
     width: "100%",
-    maxWidth: 500,
+    maxWidth: 560,
     boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
     overflow: "hidden",
   },
@@ -258,6 +252,10 @@ const styles = {
     alignItems: "center",
     gap: "1rem",
     padding: "3rem",
+    width: "100%",
+    maxWidth: 420,
+    borderRadius: 16,
+    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
   },
   spinner: {
     width: 40,
@@ -295,6 +293,7 @@ const styles = {
     margin: "0.5rem 0 0",
     opacity: 0.9,
     fontSize: "0.9rem",
+    overflowWrap: "anywhere",
   },
   errorAlert: {
     background: "#ffe5e5",
@@ -305,7 +304,6 @@ const styles = {
   },
   section: {
     padding: "1.5rem",
-    borderBottom: "1px solid #eee",
   },
   sectionTitle: {
     fontSize: "0.85rem",
@@ -315,42 +313,47 @@ const styles = {
     marginBottom: "1rem",
     fontWeight: 600,
   },
-  infoRow: {
+  responsiveRow: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
+    gap: "0.75rem",
     padding: "0.8rem 0",
-    borderBottom: "1px solid #f5f5f5",
   },
   infoLabel: {
     display: "flex",
     alignItems: "center",
     gap: "0.5rem",
-    color: "#555",
     fontSize: "0.95rem",
   },
   infoIcon: {
-    fontSize: "1.1rem",
+    minWidth: 26,
+    padding: "0.18rem 0.35rem",
+    borderRadius: 8,
+    background: "rgba(103, 89, 255, 0.12)",
+    color: "#6759FF",
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    textAlign: "center",
   },
   infoValue: {
     fontWeight: 500,
-    color: "#1E1E2F",
-  },
-  settingRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "0.8rem 0",
-    borderBottom: "1px solid #f5f5f5",
   },
   settingLabel: {
     display: "flex",
     alignItems: "center",
     gap: "0.5rem",
-    color: "#555",
   },
   settingIcon: {
-    fontSize: "1.1rem",
+    minWidth: 26,
+    padding: "0.18rem 0.35rem",
+    borderRadius: 8,
+    background: "rgba(103, 89, 255, 0.12)",
+    color: "#6759FF",
+    fontSize: "0.8rem",
+    fontWeight: 700,
+    textAlign: "center",
   },
   toggle: {
     position: "relative",
@@ -376,7 +379,7 @@ const styles = {
   },
   actionsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
     gap: "0.8rem",
   },
   actionBtn: {
@@ -385,16 +388,15 @@ const styles = {
     alignItems: "center",
     gap: "0.3rem",
     padding: "1rem 0.5rem",
-    background: "#F8F9FF",
-    border: "1px solid #eee",
     borderRadius: 12,
     cursor: "pointer",
     fontSize: "0.8rem",
-    color: "#555",
     transition: "all 0.2s",
   },
   actionIcon: {
-    fontSize: "1.3rem",
+    fontSize: "0.85rem",
+    fontWeight: 700,
+    color: "#6759FF",
   },
   dangerZone: {
     padding: "1.5rem",
@@ -431,10 +433,12 @@ const styles = {
   },
   confirmBtns: {
     display: "flex",
+    flexWrap: "wrap",
     gap: "0.8rem",
   },
   confirmLogoutBtn: {
     flex: 1,
+    minWidth: 140,
     padding: "0.7rem",
     borderRadius: 8,
     background: "#ff4757",
@@ -445,6 +449,7 @@ const styles = {
   },
   cancelBtn: {
     flex: 1,
+    minWidth: 140,
     padding: "0.7rem",
     borderRadius: 8,
     background: "#fff",
@@ -456,13 +461,10 @@ const styles = {
   footer: {
     padding: "1.5rem",
     textAlign: "center",
-    background: "#f8f9ff",
-    color: "#888",
     fontSize: "0.85rem",
   },
   version: {
     margin: "0.3rem 0 0",
     fontSize: "0.75rem",
-    color: "#aaa",
   },
 };

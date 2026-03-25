@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 export default function AuthNavbar() {
   const nav = useNavigate();
   const [openProfile, setOpenProfile] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
@@ -20,99 +21,73 @@ export default function AuthNavbar() {
 
   return (
     <>
-      {/* NAVBAR */}
-      <nav
-        style={{
-          width: "100%",
-          background: "#fff",
-          padding: "0.75rem 2rem",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-          position: "fixed",
-          top: 0,
-          left: 0,
-          zIndex: 100,
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        {/* Brand */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.6rem",
-            cursor: "pointer",
-          }}
-          onClick={() => nav("/dashboard")}
-        >
+      <nav className="site-navbar">
+        <div className="site-navbar-inner">
           <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 8,
-              background: "linear-gradient(135deg, #6759FF, #A79BFF)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: 18,
+            className="site-navbar-brand"
+            onClick={() => nav("/dashboard")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                nav("/dashboard");
+              }
             }}
           >
-            M
+            <div className="site-navbar-logo">M</div>
+            <div className="site-navbar-title">Meetify</div>
           </div>
-          <div style={{ fontSize: 20, fontWeight: 600, color: "#6759FF" }}>
-            Meetify
-          </div>
-        </div>
 
-        {/* USER SECTION */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "1rem",
-            cursor: "pointer",
-          }}
-          onClick={() => setOpenProfile(true)}
-        >
-          {/* Avatar */}
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: "50%",
-              background: "linear-gradient(135deg,#6759FF,#A79BFF)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: "0.9rem",
-            }}
+          <button
+            type="button"
+            className="site-navbar-toggle"
+            aria-label="Toggle account menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((prev) => !prev)}
           >
-            {initials}
-          </div>
+            <span />
+            <span />
+            <span />
+          </button>
 
-          {/* Name + Email */}
-          <div style={{ textAlign: "right", fontSize: "0.85rem" }}>
-            <div style={{ fontWeight: 600, color: "#1E1E2F" }}>
-              {user.name || "User"}
-            </div>
-            <div style={{ color: "#606074" }}>{user.email}</div>
+          <div className={`site-navbar-actions site-navbar-actions-user ${menuOpen ? "is-open" : ""}`}>
+            <button
+              type="button"
+              className="auth-navbar-profile"
+              onClick={() => {
+                setMenuOpen(false);
+                setOpenProfile(true);
+              }}
+            >
+              <div className="auth-navbar-avatar">{initials}</div>
+              <div className="auth-navbar-meta">
+                <div className="auth-navbar-name">{user.name || "User"}</div>
+                <div className="auth-navbar-email">{user.email}</div>
+              </div>
+            </button>
           </div>
         </div>
       </nav>
 
-      {/* RIGHT SIDE PROFILE DRAWER */}
+      {openProfile && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.28)",
+            zIndex: 190,
+          }}
+          onClick={() => setOpenProfile(false)}
+        />
+      )}
+
       {openProfile && (
         <div
           style={{
             position: "fixed",
             top: 0,
             right: 0,
-            width: "320px",
+            width: "min(360px, 100vw)",
             height: "100vh",
             background: "#fff",
             boxShadow: "-4px 0px 15px rgba(0,0,0,0.08)",
@@ -121,7 +96,6 @@ export default function AuthNavbar() {
             animation: "slideIn .25s ease",
           }}
         >
-          {/* Close */}
           <div
             style={{
               position: "absolute",
@@ -133,14 +107,13 @@ export default function AuthNavbar() {
             }}
             onClick={() => setOpenProfile(false)}
           >
-            ✖
+            x
           </div>
 
           <h2 style={{ marginBottom: "1.2rem", color: "#1E1E2F" }}>
             Your Profile
           </h2>
 
-          {/* Avatar */}
           <div
             style={{
               width: 70,
@@ -159,20 +132,17 @@ export default function AuthNavbar() {
             {initials}
           </div>
 
-          {/* User Info */}
           <div style={{ marginBottom: 20 }}>
             <p style={{ margin: 0, fontWeight: 600, color: "#1E1E2F" }}>
               {user.name}
             </p>
-            <p style={{ margin: 0, color: "#606074" }}>{user.email}</p>
+            <p style={{ margin: 0, color: "#606074", overflowWrap: "anywhere" }}>{user.email}</p>
           </div>
 
-          {/* Open full profile page - DISABLED during meeting */}
           <button
             onClick={() => {
-              // Check if in meeting - if so, don't navigate
               if (window.location.pathname.includes("/meeting/")) {
-                return; // Don't navigate to profile during meeting
+                return;
               }
               setOpenProfile(false);
               nav("/profile");
@@ -193,7 +163,6 @@ export default function AuthNavbar() {
             Open Profile Page
           </button>
 
-          {/* Logout */}
           <button
             onClick={logout}
             style={{
@@ -212,7 +181,6 @@ export default function AuthNavbar() {
         </div>
       )}
 
-      {/* slide animation */}
       <style>{`
         @keyframes slideIn {
           from { transform: translateX(100%); }

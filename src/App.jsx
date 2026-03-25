@@ -88,7 +88,7 @@ export default function App() {
         </Routes>
       </main>
 
-      {!isMeetingRoom && <footer className="footer">All rights reserved © Meetify</footer>}
+      {!isMeetingRoom && <footer className="footer">All rights reserved | Meetify</footer>}
     </div>
   );
 }

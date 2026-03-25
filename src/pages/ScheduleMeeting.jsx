@@ -89,15 +89,17 @@ export default function ScheduleMeeting() {
           backgroundColor: "background.default",
           display: "flex",
           justifyContent: "center",
-          alignItems: "center",
-          paddingTop: "6rem",
+          alignItems: "flex-start",
+          paddingTop: "5.75rem",
+          px: 2,
+          pb: 3,
         }}
       >
         <Box
           sx={{
             backgroundColor: "background.paper",
             borderRadius: 3,
-            p: 4,
+            p: { xs: 2, sm: 4 },
             boxShadow: "0 10px 30px rgba(0,0,0,0.08)",
             width: "100%",
             maxWidth: 720,
@@ -170,12 +172,15 @@ export default function ScheduleMeeting() {
               <Box
                 sx={{
                   display: "flex",
-                  gap: 2,
-                  flexWrap: "wrap",
-                  mt: 2,
-                  mb: 2,
-                }}
-              >
+                gap: 2,
+                flexWrap: "wrap",
+                mt: 2,
+                mb: 2,
+                "& > *": {
+                  flex: "1 1 180px",
+                },
+              }}
+            >
                 <DatePicker
                   label="Select Date"
                   value={date}

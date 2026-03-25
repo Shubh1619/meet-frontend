@@ -1,59 +1,62 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function PublicNavbar() {
   const nav = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    const closeMenu = () => setMenuOpen(false);
+    window.addEventListener("resize", closeMenu);
+    return () => window.removeEventListener("resize", closeMenu);
+  }, []);
 
   return (
-    <nav
-      style={{
-        width: "100%",
-        background: "#fff",
-        padding: "0.75rem 2rem",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
-        position: "fixed",
-        top: 0,
-        left: 0,
-        zIndex: 100,
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}
-    >
-      {/* Brand */}
-      <div
-        style={{ display: "flex", alignItems: "center", gap: "0.6rem", cursor: "pointer" }}
-        onClick={() => nav("/")}
-      >
+    <nav className="site-navbar">
+      <div className="site-navbar-inner">
         <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: 8,
-            background: "linear-gradient(135deg, #6759FF, #A79BFF)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#fff",
-            fontWeight: 700,
-            fontSize: 18,
+          className="site-navbar-brand"
+          onClick={() => nav("/")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              nav("/");
+            }
           }}
         >
-          M
+          <div className="site-navbar-logo">M</div>
+          <div className="site-navbar-title">Meetify</div>
         </div>
-        <div style={{ fontSize: 20, fontWeight: 600, color: "#6759FF" }}>
-          Meetify
-        </div>
-      </div>
 
-      {/* Buttons */}
-      <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-        <Link to="/login" style={{ color: "#6759FF", fontWeight: 600 }}>
-          Login
-        </Link>
-        <Link to="/register" style={{ color: "#606074" }}>
-          Register
-        </Link>
+        <button
+          type="button"
+          className="site-navbar-toggle"
+          aria-label="Toggle navigation"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((prev) => !prev)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+
+        <div className={`site-navbar-actions ${menuOpen ? "is-open" : ""}`}>
+          <Link
+            to="/login"
+            className="site-navbar-link site-navbar-link-primary"
+            onClick={() => setMenuOpen(false)}
+          >
+            Login
+          </Link>
+          <Link
+            to="/register"
+            className="site-navbar-link"
+            onClick={() => setMenuOpen(false)}
+          >
+            Register
+          </Link>
+        </div>
       </div>
     </nav>
   );

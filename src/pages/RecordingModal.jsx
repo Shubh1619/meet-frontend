@@ -6,11 +6,11 @@ const RecordingModal = ({ isOpen, onClose, onSelectOption, onStartRecording }) =
   if (!isOpen) return null;
 
   return (
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ background: "#fff", padding: "20px", borderRadius: "8px", width: "400px" }}>
+    <div className="modal-backdrop">
+      <div className="recording-modal">
         <h3>Start Recording</h3>
-        <div>
-          <label>
+        <div className="recording-options">
+          <label className={`recording-option${selectedOption === "screen" ? " is-selected" : ""}`}>
             <input
               type="radio"
               value="screen"
@@ -19,7 +19,7 @@ const RecordingModal = ({ isOpen, onClose, onSelectOption, onStartRecording }) =
             />
             Record Screen
           </label>
-          <label>
+          <label className={`recording-option${selectedOption === "camera" ? " is-selected" : ""}`}>
             <input
               type="radio"
               value="camera"
@@ -29,9 +29,9 @@ const RecordingModal = ({ isOpen, onClose, onSelectOption, onStartRecording }) =
             Record Camera
           </label>
         </div>
-        <div style={{ marginTop: "20px", display: "flex", justifyContent: "space-between" }}>
-          <button onClick={onClose}>Cancel</button>
-          <button onClick={() => { onSelectOption(selectedOption); onStartRecording(); onClose(); }}>Start</button>
+        <div className="recording-actions">
+          <button type="button" className="recording-cancel" onClick={onClose}>Cancel</button>
+          <button type="button" className="recording-start" onClick={() => { onSelectOption(selectedOption); onStartRecording(); onClose(); }}>Start</button>
         </div>
       </div>
     </div>

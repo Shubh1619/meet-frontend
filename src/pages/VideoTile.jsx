@@ -18,6 +18,7 @@ const VideoTile = ({
   videoEnabled,
   onTogglePin,
   isFeatured = false,
+  isMirrored = false,
 }) => {
   const videoRef = useRef(null);
 
@@ -38,7 +39,13 @@ const VideoTile = ({
         <FaThumbtack />
       </button>
       <div className="video-tile-media">
-        <video ref={videoRef} autoPlay playsInline muted={isLocal} className="video-tile-video" />
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted={isLocal}
+          className={`video-tile-video${isLocal && isMirrored ? " video-tile-video-mirrored" : ""}`}
+        />
         {!videoEnabled && <div className="video-tile-video-off">Camera off</div>}
       </div>
       <div className="video-tile-footer">

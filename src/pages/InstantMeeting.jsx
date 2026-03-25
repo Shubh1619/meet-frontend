@@ -53,6 +53,11 @@ export default function InstantMeeting() {
       // }
 
       setMeetingLink(res.join_link);
+
+      const roomId = res.room_id || res.join_link?.match(/\/meeting\/([^/]+)/)?.[1];
+      if (roomId && res.host_session_id) {
+        sessionStorage.setItem(`meeting-host-session:${roomId}`, res.host_session_id);
+      }
     } catch (err) {
       alert("❌ Error: " + err.message);
     }

@@ -128,7 +128,7 @@ export default function Dashboard() {
       style={{
         minHeight: "calc(100vh - 60px)",
         background: darkMode ? "#1a1a2e" : "#F8F9FF",
-        paddingTop: "6rem",
+        paddingTop: "5.75rem",
         paddingBottom: "2rem",
         paddingLeft: "1rem",
         paddingRight: "1rem",
@@ -138,7 +138,7 @@ export default function Dashboard() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
           gap: "2rem",
           maxWidth: "1400px",
           margin: "0 auto",
@@ -180,6 +180,8 @@ export default function Dashboard() {
               style={{
                 display: "flex",
                 justifyContent: "space-between",
+                gap: "0.75rem",
+                flexWrap: "wrap",
                 marginBottom: "1rem",
               }}
             >
@@ -255,7 +257,7 @@ export default function Dashboard() {
             }}
           >
             <strong style={{ color: textColor }}>Quick Actions</strong>
-            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+            <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
               <ActionButton onClick={() => (window.location.href = "/instant")}>
                 Instant Meeting
               </ActionButton>

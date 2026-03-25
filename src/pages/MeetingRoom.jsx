@@ -20,9 +20,11 @@ export default function MeetingRoom() {
   const [profileReady, setProfileReady] = useState(!isLoggedIn);
   const [meetingInfo, setMeetingInfo] = useState(null);
   const [meetingReady, setMeetingReady] = useState(false);
+  const [meetingLoadError, setMeetingLoadError] = useState("");
   const [hostSessionId, setHostSessionId] = useState("");
   const [guestSessionId, setGuestSessionId] = useState("");
   const [isHostUser, setIsHostUser] = useState(false);
+  const [hostAccessResolved, setHostAccessResolved] = useState(!isLoggedIn);
   const [myName, setMyName] = useState(initialStoredUser?.name || "Guest");
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [waitingUsers, setWaitingUsers] = useState([]);
@@ -30,6 +32,7 @@ export default function MeetingRoom() {
   const [participants, setParticipants] = useState([]);
   const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isMirrored, setIsMirrored] = useState(true);
 
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -138,10 +141,12 @@ export default function MeetingRoom() {
 
         setMeetingInfo(data);
         setRoomName(data?.title || data?.room_id || roomId || "Meeting Room");
+        setMeetingLoadError("");
       } catch (error) {
         if (!ignore) {
           console.error("Failed to load meeting info:", error);
           setRoomName(roomId || "Meeting Room");
+          setMeetingLoadError("Meeting not found or unavailable.");
         }
       } finally {
         if (!ignore) {
@@ -164,6 +169,7 @@ export default function MeetingRoom() {
     if (!isLoggedIn || !profileUser?.id || !meetingInfo?.host?.id) {
       setIsHostUser(false);
       setHostSessionId("");
+      setHostAccessResolved(true);
       return;
     }
 
@@ -174,8 +180,11 @@ export default function MeetingRoom() {
 
     if (!matchesHost) {
       setHostSessionId("");
+      setHostAccessResolved(true);
       return;
     }
+
+    setHostAccessResolved(false);
 
     async function createHostSession() {
       try {
@@ -198,12 +207,14 @@ export default function MeetingRoom() {
         const data = await response.json();
         if (!ignore) {
           setHostSessionId(data.session_id || "");
+          setHostAccessResolved(true);
         }
       } catch (error) {
         if (!ignore) {
           console.error("Failed to create host session:", error);
           setHostSessionId("");
           setIsHostUser(false);
+          setHostAccessResolved(true);
         }
       }
     }
@@ -217,6 +228,13 @@ export default function MeetingRoom() {
 
   useEffect(() => {
     if (!roomId) return;
+
+    const storedHostSession = sessionStorage.getItem(`meeting-host-session:${roomId}`);
+    if (storedHostSession) {
+      setHostSessionId(storedHostSession);
+      setIsHostUser(true);
+      setHostAccessResolved(true);
+    }
 
     const storedGuestSession = sessionStorage.getItem(`meeting-guest-session:${roomId}`);
     if (storedGuestSession) {
@@ -253,7 +271,7 @@ export default function MeetingRoom() {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: "update-state",
-        id: "you",
+        id: myId.current,
         audioEnabled: stream.getAudioTracks()[0]?.enabled ?? false,
         videoEnabled: stream.getVideoTracks()[0]?.enabled ?? false,
       }));
@@ -316,6 +334,9 @@ export default function MeetingRoom() {
     }
 
     localStreamRef.current = null;
+    setChatOpen(false);
+    setMessages([]);
+    setMsgInput("");
     setRoomVisible(false);
     setSetupVisible(true);
     setParticipants([]);
@@ -323,8 +344,18 @@ export default function MeetingRoom() {
     setIsInWaitingRoom(false);
   };
   const sendChatMessage = (message) => {
-    if (!message) return;
-    setMessages((prev) => [...prev, { from: myName || "Guest", text: message, time: new Date().toLocaleTimeString(), own: true }]);
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) return;
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: "chat-message",
+        message: trimmedMessage,
+        name: myName || "Guest",
+      }));
+    }
+
+    setMessages((prev) => [...prev, { from: myName || "Guest", text: trimmedMessage, time: new Date().toLocaleTimeString(), own: true }]);
     setMsgInput("");
   };
 
@@ -509,12 +540,24 @@ export default function MeetingRoom() {
         case "chat-message":
           setMessages((prev) => [...prev, { from: msg.name, text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
           break;
+        case "waiting-user-left":
+          setWaitingUsers((prev) => prev.filter((user) => user.client_id !== msg.client_id));
+          break;
+        case "removed":
+          alert(msg.message || "You were removed from the meeting.");
+          leaveMeeting();
+          return;
+        case "host-left":
+          alert(msg.message || "The host has left the meeting.");
+          leaveMeeting();
+          return;
         case "user-left":
           if (pcsRef.current[msg.id]) {
             pcsRef.current[msg.id].close();
             delete pcsRef.current[msg.id];
           }
           setParticipants((prev) => prev.filter((p) => p.id !== msg.id));
+          setPinnedParticipantId((prev) => (prev === msg.id ? null : prev));
           break;
       }
     };
@@ -626,7 +669,7 @@ export default function MeetingRoom() {
   }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId, guestSessionId, ensureGuestSession]);
 
   useEffect(() => {
-    if (roomId && profileReady && meetingReady && (!isLoggedIn || isHostUser === Boolean(hostSessionId))) {
+    if (roomId && profileReady && meetingReady && hostAccessResolved) {
       const timer = setTimeout(() => {
         if (isHostUser && !hostSessionId) return;
         joinCall(roomId, profileUser?.name || myName || "Guest");
@@ -634,7 +677,7 @@ export default function MeetingRoom() {
 
       return () => clearTimeout(timer);
     }
-  }, [isLoggedIn, roomId, profileReady, meetingReady, profileUser?.name, myName, joinCall, isHostUser, hostSessionId]);
+  }, [roomId, profileReady, meetingReady, hostAccessResolved, profileUser?.name, myName, joinCall, isHostUser, hostSessionId]);
 
   useEffect(() => {
     return () => {
@@ -698,12 +741,23 @@ export default function MeetingRoom() {
   const waitingCount = waitingUsers.length;
 
   // --- Render ---
-  if ((isLoggedIn && !profileReady) || !meetingReady) {
+  if ((isLoggedIn && !profileReady) || !meetingReady || !hostAccessResolved) {
     return (
       <div className="meeting-room-shell">
         <div className="meeting-state-card">
           <h2>Loading your meeting profile</h2>
           <p>Checking room access and syncing the correct host identity before joining.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (meetingLoadError) {
+    return (
+      <div className="meeting-room-shell">
+        <div className="meeting-state-card">
+          <h2>Meeting unavailable</h2>
+          <p>{meetingLoadError}</p>
         </div>
       </div>
     );
@@ -818,6 +872,7 @@ export default function MeetingRoom() {
                   captions={captions[p.id]}
                   isPinned={p.id === pinnedParticipantId}
                   isFeatured={p.id === pinnedParticipantId}
+                  isMirrored={p.isLocal ? isMirrored : false}
                   onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
                 />
               ))}
@@ -831,6 +886,7 @@ export default function MeetingRoom() {
                   {...p}
                   captions={captions[p.id]}
                   isPinned={false}
+                  isMirrored={p.isLocal ? isMirrored : false}
                   onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
                 />
               ))}
@@ -847,6 +903,7 @@ export default function MeetingRoom() {
                   key={p.id}
                   {...p}
                   captions={captions[p.id]}
+                  isMirrored={p.isLocal ? isMirrored : false}
                   onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
                 />
               ))}
@@ -860,8 +917,10 @@ export default function MeetingRoom() {
           isRecording={isRecording}
           captionsEnabled={captionsEnabled}
           chatOpen={chatOpen}
+          isMirrored={isMirrored}
           onToggleMic={() => toggleMic()}
           onToggleCamera={() => toggleCamera()}
+          onToggleMirror={() => setIsMirrored((prev) => !prev)}
           onShareScreen={() => toggleScreenShare()}
           onRecord={() => (isRecording ? stopRecording() : setRecordingModalOpen(true))}
           onCaptions={() => setCaptionsEnabled(!captionsEnabled)}

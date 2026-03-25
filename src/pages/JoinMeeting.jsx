@@ -27,9 +27,12 @@ export default function JoinMeeting(){
   }
 
   return (
-    <div className="container">
+    <div className="container" style={{ paddingTop: "5.75rem", paddingBottom: "2rem" }}>
       <div style={{maxWidth:560, margin:"0 auto", background: cardBg}} className="card">
         <h2 style={{ color: textColor }}>Join Meeting</h2>
+        <p style={{ color: darkMode ? "#a8b0c5" : "#606074", marginBottom: "1rem" }}>
+          Paste a meeting link or enter a room ID to join quickly from any device.
+        </p>
         <input 
           className="input mt-1" 
           placeholder="Enter room id or link" 
@@ -38,7 +41,7 @@ export default function JoinMeeting(){
           style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: darkMode ? "#333" : "#ddd" }}
         />
         <div className="mt-2">
-          <button className="btn" onClick={join}>Join</button>
+          <button className="btn" onClick={join} style={{ width: "100%" }}>Join</button>
         </div>
       </div>
     </div>
