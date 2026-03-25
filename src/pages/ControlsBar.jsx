@@ -57,13 +57,13 @@ const ControlsBar = ({
       active: isRecording,
       accent: "record",
     },
-    // {
-    //   key: "captions",
-    //   label: captionsEnabled ? "Captions On" : "Captions",
-    //   icon: <FaClosedCaptioning />,
-    //   onClick: onCaptions,
-    //   active: captionsEnabled,
-    // },
+    {
+      key: "captions",
+      label: captionsEnabled ? "Captions On" : "Captions",
+      icon: <FaClosedCaptioning />,
+      onClick: onCaptions,
+      active: captionsEnabled,
+    },
     {
       key: "chat",
       label: chatOpen ? "Close Chat" : "Chat",
