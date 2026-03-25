@@ -1,7 +1,24 @@
 import React, { useRef, useEffect } from "react";
-import { FaVideo, FaVideoSlash, FaMicrophone, FaMicrophoneSlash } from "react-icons/fa";
+import {
+  FaVideo,
+  FaVideoSlash,
+  FaMicrophone,
+  FaMicrophoneSlash,
+  FaThumbtack,
+} from "react-icons/fa";
 
-const VideoTile = ({ id, name, isLocal, isPinned, captions, stream, audioEnabled, videoEnabled, onTogglePin }) => {
+const VideoTile = ({
+  id,
+  name,
+  isLocal,
+  isPinned,
+  captions,
+  stream,
+  audioEnabled,
+  videoEnabled,
+  onTogglePin,
+  isFeatured = false,
+}) => {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -11,21 +28,31 @@ const VideoTile = ({ id, name, isLocal, isPinned, captions, stream, audioEnabled
   }, [stream]);
 
   return (
-    <div style={{ border: "1px solid #ccc", padding: "10px", margin: "5px", position: "relative" }}>
-      <video ref={videoRef} autoPlay playsInline muted={isLocal} style={{ width: "100%", height: "200px", background: "#000" }} />
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px" }}>
-        <span>{name} {isLocal ? "(You)" : ""}</span>
-        <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+    <article className={`video-tile${isFeatured ? " video-tile-featured" : ""}${isPinned ? " is-pinned" : ""}`}>
+      <button
+        type="button"
+        className="video-tile-pin"
+        onClick={() => onTogglePin(id)}
+        aria-label={isPinned ? `Unpin ${name}` : `Pin ${name}`}
+      >
+        <FaThumbtack />
+      </button>
+      <div className="video-tile-media">
+        <video ref={videoRef} autoPlay playsInline muted={isLocal} className="video-tile-video" />
+        {!videoEnabled && <div className="video-tile-video-off">Camera off</div>}
+      </div>
+      <div className="video-tile-footer">
+        <span className="video-tile-name">
+          {name} {isLocal ? "(You)" : ""}
+        </span>
+        <span className="video-tile-status">
           {audioEnabled ? <FaMicrophone /> : <FaMicrophoneSlash />}
           {videoEnabled ? <FaVideo /> : <FaVideoSlash />}
         </span>
       </div>
-      {captions && <div style={{ marginTop: "4px", fontStyle: "italic" }}>{captions}</div>}
-      <button onClick={() => onTogglePin(id)} style={{ position: "absolute", top: "5px", right: "5px" }}>
-        {isPinned ? "Unpin" : "Pin"}
-      </button>
-    </div>
+      {captions && <div className="video-tile-captions">{captions}</div>}
+    </article>
   );
 };
 
-export default VideoTile;   
+export default VideoTile;

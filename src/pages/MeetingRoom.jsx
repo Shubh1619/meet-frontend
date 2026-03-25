@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
@@ -41,6 +41,9 @@ export default function MeetingRoom() {
   const pcsRef = useRef({});
   const wsRef = useRef(null);
   const myId = useRef(null);
+  const hasJoinedRef = useRef(false);
+  const reconnectTimeoutRef = useRef(null);
+  const reconnectFnRef = useRef(null);
 
   useEffect(() => {
     if (!myId.current) {
@@ -59,35 +62,36 @@ export default function MeetingRoom() {
   }, [isLoggedIn]);
 
   // --- Local Stream Handler ---
-  function setLocalStreamHandler(stream) {
+  const setLocalStreamHandler = useCallback((stream, displayName = myName) => {
     localStreamRef.current = stream;
     setParticipants((prev) => {
       const exists = prev.find((p) => p.id === "you");
       if (exists) {
         return prev.map((p) => (p.id === "you" ? { ...p, stream } : p));
       } else {
-        return [...prev, { id: "you", name: myName, stream, audioEnabled: true, videoEnabled: true, isLocal: true }];
+        return [...prev, { id: "you", name: displayName, stream, audioEnabled: true, videoEnabled: true, isLocal: true }];
       }
     });
-  }
+  }, [myName]);
 
   function monitorAudioLevel(stream, id) {
     if (!id) return;
     setActiveSpeakerId(id);
   }
 
-  function sendStateUpdate() {
-    const local = participants.find((p) => p.id === "you");
-    if (!local) return;
+  const sendStateUpdate = useCallback(() => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: "update-state",
         id: "you",
-        audioEnabled: local.audioEnabled,
-        videoEnabled: local.videoEnabled,
+        audioEnabled: stream.getAudioTracks()[0]?.enabled ?? false,
+        videoEnabled: stream.getVideoTracks()[0]?.enabled ?? false,
       }));
     }
-  }
+  }, []);
 
   function toggleMic() {
     const stream = localStreamRef.current;
@@ -120,9 +124,36 @@ export default function MeetingRoom() {
   };
   const stopRecording = () => setIsRecording(false);
   const leaveMeeting = () => {
+    hasJoinedRef.current = false;
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+    }
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "leave", id: myId.current }));
+    }
+
+    Object.values(pcsRef.current).forEach((pc) => pc.close());
+    pcsRef.current = {};
+
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+
+    localStreamRef.current = null;
     setRoomVisible(false);
     setSetupVisible(true);
     setParticipants([]);
+    setPinnedParticipantId(null);
+    setIsInWaitingRoom(false);
   };
   const sendChatMessage = (message) => {
     if (!message) return;
@@ -131,7 +162,7 @@ export default function MeetingRoom() {
   };
 
   // --- Peer Connection ---
-  function createPeerConnection(remoteId, remoteName, audioEnabled, videoEnabled) {
+  const createPeerConnection = useCallback((remoteId, remoteName, audioEnabled, videoEnabled) => {
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -164,22 +195,28 @@ export default function MeetingRoom() {
     };
 
     return pc;
-  }
+  }, []);
 
   // --- WebSocket ---
-  function connectWebSocket(room) {
+  const connectWebSocket = useCallback((room, participantName, hostMode) => {
     const WS_SERVER = import.meta.env.VITE_WS_URL;
     const wsUrl = `${WS_SERVER}/ws/${room}`;
+
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.close();
+    }
+
     const socket = new WebSocket(wsUrl);
     wsRef.current = socket;
 
     socket.onopen = () => {
-      const joinType = isLoggedIn ? "host-join" : "waiting-room-request";
+      const joinType = hostMode ? "host-join" : "waiting-room-request";
       socket.send(
         JSON.stringify({
           type: joinType,
           from: myId.current,
-          name: myName,
+          name: participantName,
           audioEnabled: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? true,
           videoEnabled: localStreamRef.current?.getVideoTracks()[0]?.enabled ?? true,
         })
@@ -215,7 +252,7 @@ export default function MeetingRoom() {
             const peer = createPeerConnection(msg.id, msg.name, true, true);
             const offer = await peer.createOffer();
             await peer.setLocalDescription(offer);
-            wsRef.current?.send(JSON.stringify({ ...peer.localDescription.toJSON(), from: myId.current, to: msg.id, name: myName }));
+            wsRef.current?.send(JSON.stringify({ ...peer.localDescription.toJSON(), from: myId.current, to: msg.id, name: participantName }));
           }
           return;
 
@@ -251,14 +288,14 @@ export default function MeetingRoom() {
         case "join": {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: myName }));
+          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: participantName }));
           break;
         }
         case "offer": {
           await pc.setRemoteDescription(new RTCSessionDescription(msg));
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
-          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: myName }));
+          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: participantName }));
           break;
         }
         case "answer":
@@ -283,12 +320,28 @@ export default function MeetingRoom() {
     socket.onclose = () => {
       if (captionsEnabled) setCaptionsEnabled(false);
       if (isRecording) setIsRecording(false);
-      setTimeout(() => connectWebSocket(room), 5000);
+
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+
+      reconnectTimeoutRef.current = setTimeout(() => {
+        if (hasJoinedRef.current && reconnectFnRef.current) {
+          reconnectFnRef.current(room, participantName, hostMode);
+        }
+      }, 5000);
     };
-  };
+  }, [captionsEnabled, isRecording, createPeerConnection]);
+
+  useEffect(() => {
+    reconnectFnRef.current = connectWebSocket;
+  }, [connectWebSocket]);
 
   // --- Join Call ---
-  const joinCall = async (room = roomId || "default-room", name) => {
+  const joinCall = useCallback(async (room = roomId || "default-room", name) => {
+    if (hasJoinedRef.current) return;
+    hasJoinedRef.current = true;
+
     const resolvedName = isLoggedIn ? (storedUser?.name || myName || "Host") : (name || myName || "Guest");
     setMyName(resolvedName);
     setSetupVisible(false);
@@ -306,7 +359,7 @@ export default function MeetingRoom() {
     setRoomName(room);
 
     sessionStorage.setItem("room", room);
-    sessionStorage.setItem("name", name);
+    sessionStorage.setItem("name", resolvedName);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -318,26 +371,51 @@ export default function MeetingRoom() {
       if (stream.getAudioTracks()[0] && savedMic) stream.getAudioTracks()[0].enabled = false;
       if (stream.getVideoTracks()[0] && savedCam) stream.getVideoTracks()[0].enabled = false;
 
-      setLocalStreamHandler(stream);
+      setLocalStreamHandler(stream, resolvedName);
       monitorAudioLevel(stream, "localVideoContainer");
     } catch (e) {
+      hasJoinedRef.current = false;
       console.error("Media error", e);
       alert("Could not access camera and microphone.");
       return;
     }
 
-    connectWebSocket(room);
-  };
+    connectWebSocket(room, resolvedName, isLoggedIn);
+  }, [roomId, isLoggedIn, storedUser?.name, myName, connectWebSocket, setLocalStreamHandler]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isLoggedIn && roomId) {
       const timer = setTimeout(() => {
         joinCall(roomId, storedUser?.name || "Host");
       }, 0);
+
       return () => clearTimeout(timer);
     }
-  }, [isLoggedIn, roomId, storedUser, joinCall]);
+  }, [isLoggedIn, roomId, storedUser?.name, joinCall]);
+
+  useEffect(() => {
+    return () => {
+      hasJoinedRef.current = false;
+
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+
+      Object.values(pcsRef.current).forEach((pc) => pc.close());
+      pcsRef.current = {};
+
+      if (wsRef.current) {
+        wsRef.current.onclose = null;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+        cameraStreamRef.current = null;
+      }
+    };
+  }, []);
 
   const approveGuest = (client_id) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -456,7 +534,7 @@ export default function MeetingRoom() {
 
         {/* Main Content */}
         <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
-          <div id="videos">
+          <div id="videos" className={`participant-grid participants-${Math.min(participants.length || 1, 6)}`}>
             {participants
               .filter((p) => !pinnedParticipantId || p.id === pinnedParticipantId)
               .map((p) => (
@@ -465,6 +543,7 @@ export default function MeetingRoom() {
                   {...p}
                   captions={captions[p.id]}
                   isPinned={p.id === pinnedParticipantId}
+                  isFeatured={p.id === pinnedParticipantId}
                   onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
                 />
               ))}
