@@ -14,7 +14,9 @@ export default function MeetingRoom() {
   const [roomVisible, setRoomVisible] = useState(false);
   const [roomName, setRoomName] = useState("Room Name");
   const [myName, setMyName] = useState(storedUser?.name || "Guest");
-
+  const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
+  const [waitingUsers, setWaitingUsers] = useState([]);
+  const [waitMessage, setWaitMessage] = useState("");
   const [participants, setParticipants] = useState([]);
   const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -36,17 +38,30 @@ export default function MeetingRoom() {
   const cameraStreamRef = useRef(null);
   const pcsRef = useRef({});
   const wsRef = useRef(null);
-  const myId = useRef(Math.random().toString(36).substring(7));
+  const myId = useRef(null);
+
+  useEffect(() => {
+    if (!myId.current) {
+      myId.current = Math.random().toString(36).substring(2, 10);
+    }
+  }, []);
 
   // --- Join Call ---
   const joinCall = async (room, name) => {
     const resolvedName = isLoggedIn ? myName : name || myName || "Guest";
     setMyName(resolvedName);
     setSetupVisible(false);
-    setRoomVisible(true);
+
     if (isLoggedIn) {
+      setRoomVisible(true);
+      setIsInWaitingRoom(false);
       console.log("Logged in user, using profile identity:", resolvedName);
+    } else {
+      setRoomVisible(false);
+      setIsInWaitingRoom(true);
+      setWaitMessage("Waiting for host approval...");
     }
+
     setRoomName(room);
 
     sessionStorage.setItem("room", room);
@@ -147,17 +162,16 @@ export default function MeetingRoom() {
 
   // --- WebSocket ---
   const connectWebSocket = (room) => {
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    // With this:
     const WS_SERVER = import.meta.env.VITE_WS_URL;
     const wsUrl = `${WS_SERVER}/ws/${room}`;
     const socket = new WebSocket(wsUrl);
     wsRef.current = socket;
 
     socket.onopen = () => {
+      const joinType = isLoggedIn ? "host-join" : "waiting-room-request";
       socket.send(
         JSON.stringify({
-          type: "join",
+          type: joinType,
           from: myId.current,
           name: myName,
           audioEnabled: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? true,
@@ -170,13 +184,39 @@ export default function MeetingRoom() {
       if (e.data.includes('"type":"ping"')) return;
       const msg = JSON.parse(e.data);
       if (msg.from === myId.current) return;
-      
+
       let pc = pcsRef.current[msg.from];
       if (!pc && (msg.type === "offer" || msg.type === "join")) {
         pc = createPeerConnection(msg.from, msg.name, msg.audioEnabled, msg.videoEnabled);
       }
 
       switch (msg.type) {
+        case "waiting-user":
+          setWaitingUsers((prev) => {
+            if (prev.find((u) => u.client_id === msg.client_id)) return prev;
+            return [...prev, { client_id: msg.client_id, name: msg.name }];
+          });
+          return;
+
+        case "waiting":
+          setIsInWaitingRoom(true);
+          setWaitMessage(msg.message || "Waiting for host approval...");
+          return;
+
+        case "approved":
+          setIsInWaitingRoom(false);
+          setRoomVisible(true);
+          setWaitMessage("");
+          return;
+
+        case "denied":
+          alert(msg.message || "Your entry was denied by the host.");
+          setIsInWaitingRoom(false);
+          setSetupVisible(true);
+          setRoomVisible(false);
+          setWaitMessage("");
+          return;
+
         case "join": {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
@@ -214,6 +254,20 @@ export default function MeetingRoom() {
       if (isRecording) setIsRecording(false);
       setTimeout(() => connectWebSocket(room), 5000);
     };
+  };
+
+  const approveGuest = (client_id) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "approve", target_client_id: client_id }));
+      setWaitingUsers((prev) => prev.filter((u) => u.client_id !== client_id));
+    }
+  };
+
+  const denyGuest = (client_id) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "deny", target_client_id: client_id }));
+      setWaitingUsers((prev) => prev.filter((u) => u.client_id !== client_id));
+    }
   };
 
   // --- Captions ---
@@ -265,6 +319,15 @@ export default function MeetingRoom() {
     );
   }
 
+  if (isInWaitingRoom) {
+    return (
+      <div style={{ textAlign: "center", margin: "120px auto" }}>
+        <h2>Waiting for host approval</h2>
+        <p>{waitMessage || "Please wait while the host approves your entry."}</p>
+      </div>
+    );
+  }
+
   if (roomVisible) {
     return (
       <div id="room">
@@ -291,6 +354,22 @@ export default function MeetingRoom() {
             <span>Secured Connection</span>
           </div>
         </div>
+
+        {/* Waiting room requests (host only) */}
+        {waitingUsers.length > 0 && (
+          <div className="waiting-room-notification" style={{ padding: "10px", background: "#fffae5", border: "1px solid #ffecb5", margin: "12px" }}>
+            <strong>Guest requests waiting approval:</strong>
+            {waitingUsers.map((user) => (
+              <div key={user.client_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "6px" }}>
+                <span>{user.name}</span>
+                <span style={{ display: "flex", gap: "6px" }}>
+                  <button onClick={() => approveGuest(user.client_id)}>Approve</button>
+                  <button onClick={() => denyGuest(user.client_id)}>Deny</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Main Content */}
         <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
