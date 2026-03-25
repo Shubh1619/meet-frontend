@@ -1129,10 +1129,10 @@ export default function MeetingRoom() {
         {/* Header */}
         <div className="room-header">
           <div className="room-info">
-            {/* <div className="room-pill room-name">
+            <div className="room-pill room-name">
               <FaDoorOpen />
               <span>{roomName}</span>
-            </div> */}
+            </div>
             <div className="room-pill participant-count">
               <FaUsers />
               <span>{participants.length} participant(s)</span>
