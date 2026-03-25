@@ -167,6 +167,15 @@ export default function MeetingRoom() {
 
   useEffect(() => {
     if (!meetingReady) return;
+
+    // If a host session is already present for this room (e.g. instant meeting creator),
+    // do not downgrade to guest mode.
+    if (hostSessionId) {
+      setIsHostUser(true);
+      setHostAccessResolved(true);
+      return;
+    }
+
     if (!isLoggedIn || !profileUser?.id || !meetingInfo?.host?.id) {
       setIsHostUser(false);
       setHostSessionId("");
@@ -175,7 +184,7 @@ export default function MeetingRoom() {
     }
 
     let ignore = false;
-    const matchesHost = profileUser.id === meetingInfo.host.id;
+    const matchesHost = String(profileUser.id) === String(meetingInfo.host.id);
 
     setIsHostUser(matchesHost);
 
@@ -225,7 +234,7 @@ export default function MeetingRoom() {
     return () => {
       ignore = true;
     };
-  }, [isLoggedIn, profileUser?.id, meetingInfo?.host?.id, meetingReady, roomId]);
+  }, [isLoggedIn, profileUser?.id, meetingInfo?.host?.id, meetingReady, roomId, hostSessionId]);
 
   useEffect(() => {
     if (!roomId) return;
