@@ -21,6 +21,7 @@ export default function MeetingRoom() {
   const [meetingInfo, setMeetingInfo] = useState(null);
   const [meetingReady, setMeetingReady] = useState(false);
   const [hostSessionId, setHostSessionId] = useState("");
+  const [guestSessionId, setGuestSessionId] = useState("");
   const [isHostUser, setIsHostUser] = useState(false);
   const [myName, setMyName] = useState(initialStoredUser?.name || "Guest");
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
@@ -53,10 +54,18 @@ export default function MeetingRoom() {
   const reconnectFnRef = useRef(null);
 
   useEffect(() => {
-    if (!myId.current) {
+    if (!roomId) return;
+
+    const sessionKey = `meeting-client-id:${roomId}`;
+    const storedClientId = sessionStorage.getItem(sessionKey);
+
+    if (storedClientId) {
+      myId.current = storedClientId;
+    } else {
       myId.current = Math.random().toString(36).substring(2, 10);
+      sessionStorage.setItem(sessionKey, myId.current);
     }
-  }, []);
+  }, [roomId]);
 
   useEffect(() => {
     const nav = document.querySelector("nav");
@@ -206,6 +215,15 @@ export default function MeetingRoom() {
     };
   }, [isLoggedIn, profileUser?.id, meetingInfo?.host?.id, meetingReady, roomId]);
 
+  useEffect(() => {
+    if (!roomId) return;
+
+    const storedGuestSession = sessionStorage.getItem(`meeting-guest-session:${roomId}`);
+    if (storedGuestSession) {
+      setGuestSessionId(storedGuestSession);
+    }
+  }, [roomId]);
+
   // --- Local Stream Handler ---
   const setLocalStreamHandler = useCallback((stream, displayName = myName) => {
     localStreamRef.current = stream;
@@ -311,6 +329,11 @@ export default function MeetingRoom() {
   };
 
   // --- Peer Connection ---
+  const shouldInitiateConnection = useCallback((remoteId) => {
+    if (!myId.current || !remoteId) return false;
+    return myId.current.localeCompare(remoteId) < 0;
+  }, []);
+
   const createPeerConnection = useCallback((remoteId, remoteName, audioEnabled, videoEnabled) => {
     const pc = new RTCPeerConnection({
       iceServers: [
@@ -427,7 +450,7 @@ export default function MeetingRoom() {
             ];
           });
 
-          if (!pcsRef.current[msg.id]) {
+          if (!pcsRef.current[msg.id] && shouldInitiateConnection(msg.id)) {
             const peer = createPeerConnection(msg.id, msg.name, true, true);
             const offer = await peer.createOffer();
             await peer.setLocalDescription(offer);
@@ -510,11 +533,43 @@ export default function MeetingRoom() {
         }
       }, 5000);
     };
-  }, [captionsEnabled, isRecording, createPeerConnection]);
+  }, [captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection]);
 
   useEffect(() => {
     reconnectFnRef.current = connectWebSocket;
   }, [connectWebSocket]);
+
+  const ensureGuestSession = useCallback(async (displayName) => {
+    if (!roomId) return "";
+
+    const storageKey = `meeting-guest-session:${roomId}`;
+    const cachedSessionId = sessionStorage.getItem(storageKey);
+    if (cachedSessionId) {
+      setGuestSessionId(cachedSessionId);
+      return cachedSessionId;
+    }
+
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/guest/session`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        room_id: roomId,
+        name: displayName,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to create guest session");
+    }
+
+    const data = await response.json();
+    const sessionId = data.session_id || "";
+    sessionStorage.setItem(storageKey, sessionId);
+    setGuestSessionId(sessionId);
+    return sessionId;
+  }, [roomId]);
 
   // --- Join Call ---
   const joinCall = useCallback(async (room = roomId || "default-room", name) => {
@@ -525,6 +580,7 @@ export default function MeetingRoom() {
       ? (profileUser?.name || myName || "Host")
       : (name || myName || "Guest");
     const hostMode = Boolean(isHostUser && hostSessionId);
+    let sessionId = hostMode ? hostSessionId : guestSessionId;
     setMyName(resolvedName);
     setSetupVisible(false);
 
@@ -544,6 +600,10 @@ export default function MeetingRoom() {
     sessionStorage.setItem("name", resolvedName);
 
     try {
+      if (!hostMode && !sessionId) {
+        sessionId = await ensureGuestSession(resolvedName);
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       cameraStreamRef.current = stream;
 
@@ -562,8 +622,8 @@ export default function MeetingRoom() {
       return;
     }
 
-    connectWebSocket(room, resolvedName, hostMode, hostSessionId);
-  }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId]);
+    connectWebSocket(room, resolvedName, hostMode, sessionId);
+  }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId, guestSessionId, ensureGuestSession]);
 
   useEffect(() => {
     if (roomId && profileReady && meetingReady && (!isLoggedIn || isHostUser === Boolean(hostSessionId))) {
