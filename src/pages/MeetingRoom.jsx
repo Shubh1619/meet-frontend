@@ -18,6 +18,10 @@ export default function MeetingRoom() {
   const [roomName, setRoomName] = useState("Room Name");
   const [profileUser, setProfileUser] = useState(initialStoredUser);
   const [profileReady, setProfileReady] = useState(!isLoggedIn);
+  const [meetingInfo, setMeetingInfo] = useState(null);
+  const [meetingReady, setMeetingReady] = useState(false);
+  const [hostSessionId, setHostSessionId] = useState("");
+  const [isHostUser, setIsHostUser] = useState(false);
   const [myName, setMyName] = useState(initialStoredUser?.name || "Guest");
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [waitingUsers, setWaitingUsers] = useState([]);
@@ -109,6 +113,98 @@ export default function MeetingRoom() {
       ignore = true;
     };
   }, [isLoggedIn, initialStoredUser?.name]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadMeetingAccess() {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/meeting/${roomId}`);
+        if (!response.ok) {
+          throw new Error("Unable to load meeting info");
+        }
+
+        const data = await response.json();
+        if (ignore) return;
+
+        setMeetingInfo(data);
+        setRoomName(data?.title || data?.room_id || roomId || "Meeting Room");
+      } catch (error) {
+        if (!ignore) {
+          console.error("Failed to load meeting info:", error);
+          setRoomName(roomId || "Meeting Room");
+        }
+      } finally {
+        if (!ignore) {
+          setMeetingReady(true);
+        }
+      }
+    }
+
+    if (roomId) {
+      loadMeetingAccess();
+    }
+
+    return () => {
+      ignore = true;
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!meetingReady) return;
+    if (!isLoggedIn || !profileUser?.id || !meetingInfo?.host?.id) {
+      setIsHostUser(false);
+      setHostSessionId("");
+      return;
+    }
+
+    let ignore = false;
+    const matchesHost = profileUser.id === meetingInfo.host.id;
+
+    setIsHostUser(matchesHost);
+
+    if (!matchesHost) {
+      setHostSessionId("");
+      return;
+    }
+
+    async function createHostSession() {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/host-session`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            room_id: roomId,
+            token,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to validate host session");
+        }
+
+        const data = await response.json();
+        if (!ignore) {
+          setHostSessionId(data.session_id || "");
+        }
+      } catch (error) {
+        if (!ignore) {
+          console.error("Failed to create host session:", error);
+          setHostSessionId("");
+          setIsHostUser(false);
+        }
+      }
+    }
+
+    createHostSession();
+
+    return () => {
+      ignore = true;
+    };
+  }, [isLoggedIn, profileUser?.id, meetingInfo?.host?.id, meetingReady, roomId]);
 
   // --- Local Stream Handler ---
   const setLocalStreamHandler = useCallback((stream, displayName = myName) => {
@@ -251,7 +347,7 @@ export default function MeetingRoom() {
   }, []);
 
   // --- WebSocket ---
-  const connectWebSocket = useCallback((room, participantName, hostMode) => {
+  const connectWebSocket = useCallback((room, participantName, hostMode, sessionId = "") => {
     const WS_SERVER = import.meta.env.VITE_WS_URL;
     const wsUrl = `${WS_SERVER}/ws/${room}`;
 
@@ -270,6 +366,7 @@ export default function MeetingRoom() {
           type: joinType,
           from: myId.current,
           name: participantName,
+          session_id: sessionId,
           audioEnabled: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? true,
           videoEnabled: localStreamRef.current?.getVideoTracks()[0]?.enabled ?? true,
         })
@@ -409,7 +506,7 @@ export default function MeetingRoom() {
 
       reconnectTimeoutRef.current = setTimeout(() => {
         if (hasJoinedRef.current && reconnectFnRef.current) {
-          reconnectFnRef.current(room, participantName, hostMode);
+          reconnectFnRef.current(room, participantName, hostMode, sessionId);
         }
       }, 5000);
     };
@@ -427,10 +524,11 @@ export default function MeetingRoom() {
     const resolvedName = isLoggedIn
       ? (profileUser?.name || myName || "Host")
       : (name || myName || "Guest");
+    const hostMode = Boolean(isHostUser && hostSessionId);
     setMyName(resolvedName);
     setSetupVisible(false);
 
-    if (isLoggedIn) {
+    if (hostMode) {
       setRoomVisible(true);
       setIsInWaitingRoom(false);
       console.log("Host auto join, using profile identity:", resolvedName);
@@ -464,18 +562,19 @@ export default function MeetingRoom() {
       return;
     }
 
-    connectWebSocket(room, resolvedName, isLoggedIn);
-  }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler]);
+    connectWebSocket(room, resolvedName, hostMode, hostSessionId);
+  }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId]);
 
   useEffect(() => {
-    if (isLoggedIn && roomId && profileReady) {
+    if (roomId && profileReady && meetingReady && (!isLoggedIn || isHostUser === Boolean(hostSessionId))) {
       const timer = setTimeout(() => {
-        joinCall(roomId, profileUser?.name || myName || "Host");
+        if (isHostUser && !hostSessionId) return;
+        joinCall(roomId, profileUser?.name || myName || "Guest");
       }, 0);
 
       return () => clearTimeout(timer);
     }
-  }, [isLoggedIn, roomId, profileReady, profileUser?.name, myName, joinCall]);
+  }, [isLoggedIn, roomId, profileReady, meetingReady, profileUser?.name, myName, joinCall, isHostUser, hostSessionId]);
 
   useEffect(() => {
     return () => {
@@ -539,12 +638,12 @@ export default function MeetingRoom() {
   const waitingCount = waitingUsers.length;
 
   // --- Render ---
-  if (isLoggedIn && !profileReady) {
+  if ((isLoggedIn && !profileReady) || !meetingReady) {
     return (
       <div className="meeting-room-shell">
         <div className="meeting-state-card">
           <h2>Loading your meeting profile</h2>
-          <p>Syncing your latest user details before joining the room.</p>
+          <p>Checking room access and syncing the correct host identity before joining.</p>
         </div>
       </div>
     );
