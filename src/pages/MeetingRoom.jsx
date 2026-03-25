@@ -26,7 +26,9 @@ export default function MeetingRoom() {
   const [guestSessionId, setGuestSessionId] = useState("");
   const [isHostUser, setIsHostUser] = useState(false);
   const [hostAccessResolved, setHostAccessResolved] = useState(!isLoggedIn);
-  const [myName, setMyName] = useState(initialStoredUser?.name || sessionStorage.getItem(`meeting-guest-name:${roomId}`)  );
+  const [myName, setMyName] = useState(
+    initialStoredUser?.name || sessionStorage.getItem(`meeting-guest-name:${roomId}`) || "Guest"
+  );
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [waitingUsers, setWaitingUsers] = useState([]);
   const [waitMessage, setWaitMessage] = useState("");
@@ -899,8 +901,12 @@ export default function MeetingRoom() {
     if (!roomId || !meetingReady || !hostAccessResolved) return;
     if (hasJoinedRef.current) return;
 
-    const rememberedName = sessionStorage.getItem(`meeting-guest-name:${roomId}`) || myName;
-    if (!rememberedName || rememberedName === "Guest") return;
+    const rememberedGuestSession = sessionStorage.getItem(`meeting-guest-session:${roomId}`);
+    const rememberedGuestName = sessionStorage.getItem(`meeting-guest-name:${roomId}`);
+    const rememberedName = rememberedGuestName || sessionStorage.getItem("name") || myName || "Guest";
+
+    // Only auto-rejoin if this browser already joined this room before.
+    if (!rememberedGuestSession && !rememberedGuestName) return;
 
     const timer = setTimeout(() => {
       joinCall(roomId, rememberedName);
@@ -1123,10 +1129,10 @@ export default function MeetingRoom() {
         {/* Header */}
         <div className="room-header">
           <div className="room-info">
-            <div className="room-pill room-name">
+            {/* <div className="room-pill room-name">
               <FaDoorOpen />
               <span>{roomName}</span>
-            </div>
+            </div> */}
             <div className="room-pill participant-count">
               <FaUsers />
               <span>{participants.length} participant(s)</span>
