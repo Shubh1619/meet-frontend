@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaDoorOpen, FaLock, FaUsers, FaHourglassHalf } from "react-icons/fa";
+import { FaDoorOpen, FaUsers, FaHourglassHalf } from "react-icons/fa";
 import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
 import RecordingModal from "./RecordingModal";
@@ -26,18 +26,21 @@ export default function MeetingRoom() {
   const [guestSessionId, setGuestSessionId] = useState("");
   const [isHostUser, setIsHostUser] = useState(false);
   const [hostAccessResolved, setHostAccessResolved] = useState(!isLoggedIn);
-  const [myName, setMyName] = useState(initialStoredUser?.name || "Guest");
+  const [myName, setMyName] = useState(
+    initialStoredUser?.name || sessionStorage.getItem(`meeting-guest-name:${roomId}`) || "Guest"
+  );
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [waitingUsers, setWaitingUsers] = useState([]);
   const [waitMessage, setWaitMessage] = useState("");
   const [participants, setParticipants] = useState([]);
   const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [isMirrored, setIsMirrored] = useState(true);
+  const [isMirrored] = useState(true);
 
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState("");
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   const [recordingModalOpen, setRecordingModalOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -50,6 +53,7 @@ export default function MeetingRoom() {
   // --- Media/WebRTC ---
   const localStreamRef = useRef(null);
   const cameraStreamRef = useRef(null);
+  const screenStreamRef = useRef(null);
   const pcsRef = useRef({});
   const wsRef = useRef(null);
   const myId = useRef(null);
@@ -328,13 +332,87 @@ export default function MeetingRoom() {
     sendStateUpdate();
   }
 
-  const toggleScreenShare = () => setIsScreenSharing((prev) => !prev);
+  const toggleScreenShare = useCallback(async () => {
+    const localStream = localStreamRef.current;
+    if (!localStream) return;
+
+    if (!isScreenSharing) {
+      try {
+        const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const screenTrack = displayStream.getVideoTracks()[0];
+        if (!screenTrack) return;
+
+        screenStreamRef.current = displayStream;
+
+        Object.values(pcsRef.current).forEach((pc) => {
+          const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
+          if (sender) sender.replaceTrack(screenTrack);
+        });
+
+        const audioTrack = localStream.getAudioTracks()[0];
+        const previewStream = new MediaStream();
+        if (audioTrack) previewStream.addTrack(audioTrack);
+        previewStream.addTrack(screenTrack);
+        setLocalStreamHandler(previewStream, myName);
+        setIsScreenSharing(true);
+
+        screenTrack.onended = () => {
+          setIsScreenSharing((current) => {
+            if (current) {
+              const camTrack = cameraStreamRef.current?.getVideoTracks?.()[0];
+              if (camTrack) {
+                Object.values(pcsRef.current).forEach((pc) => {
+                  const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
+                  if (sender) sender.replaceTrack(camTrack);
+                });
+
+                const restoreAudioTrack = localStreamRef.current?.getAudioTracks?.()[0];
+                const restoreStream = new MediaStream();
+                if (restoreAudioTrack) restoreStream.addTrack(restoreAudioTrack);
+                restoreStream.addTrack(camTrack);
+                setLocalStreamHandler(restoreStream, myName);
+              }
+              if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach((track) => track.stop());
+                screenStreamRef.current = null;
+              }
+            }
+            return false;
+          });
+        };
+      } catch (error) {
+        console.error("Screen share error:", error);
+        alert("Unable to start screen sharing.");
+      }
+      return;
+    }
+
+    const camTrack = cameraStreamRef.current?.getVideoTracks?.()[0];
+    if (!camTrack) return;
+
+    Object.values(pcsRef.current).forEach((pc) => {
+      const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
+      if (sender) sender.replaceTrack(camTrack);
+    });
+
+    const restoreAudioTrack = localStream.getAudioTracks()[0];
+    const restoreStream = new MediaStream();
+    if (restoreAudioTrack) restoreStream.addTrack(restoreAudioTrack);
+    restoreStream.addTrack(camTrack);
+    setLocalStreamHandler(restoreStream, myName);
+    setIsScreenSharing(false);
+
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+    }
+  }, [isScreenSharing, myName, setLocalStreamHandler]);
   const startRecording = () => {
     setIsRecording(true);
     setRecordingTimer("00:00");
   };
   const stopRecording = () => setIsRecording(false);
-  const leaveMeeting = (shouldRedirect = true) => {
+  const leaveMeeting = useCallback((shouldRedirect = true) => {
     hasJoinedRef.current = false;
 
     if (reconnectTimeoutRef.current) {
@@ -358,6 +436,10 @@ export default function MeetingRoom() {
       cameraStreamRef.current.getTracks().forEach((track) => track.stop());
       cameraStreamRef.current = null;
     }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+    }
 
     localStreamRef.current = null;
     setChatOpen(false);
@@ -368,6 +450,7 @@ export default function MeetingRoom() {
     setParticipants([]);
     setPinnedParticipantId(null);
     setIsInWaitingRoom(false);
+    setUnreadChatCount(0);
 
     if (shouldRedirect) {
       if (isHostUser) {
@@ -376,7 +459,7 @@ export default function MeetingRoom() {
         navigate("/login");
       }
     }
-  };
+  }, [isHostUser, navigate]);
   const sendChatMessage = (message) => {
     const trimmedMessage = message.trim();
     if (!trimmedMessage) return;
@@ -593,6 +676,7 @@ export default function MeetingRoom() {
           break;
         case "chat-message":
           setMessages((prev) => [...prev, { from: msg.name, text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
+          setUnreadChatCount((count) => (chatOpen ? count : count + 1));
           break;
         case "waiting-user-left":
           setWaitingUsers((prev) => prev.filter((user) => user.client_id !== msg.client_id));
@@ -630,7 +714,7 @@ export default function MeetingRoom() {
         }
       }, 5000);
     };
-  }, [captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection]);
+  }, [captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting]);
 
   useEffect(() => {
     reconnectFnRef.current = connectWebSocket;
@@ -695,6 +779,7 @@ export default function MeetingRoom() {
 
     sessionStorage.setItem("room", room);
     sessionStorage.setItem("name", resolvedName);
+    sessionStorage.setItem(`meeting-guest-name:${roomId}`, resolvedName);
 
     try {
       if (!hostMode && !sessionId) {
@@ -736,6 +821,21 @@ export default function MeetingRoom() {
   }, [roomId, isLoggedIn, profileReady, meetingReady, hostAccessResolved, profileUser?.name, myName, joinCall, isHostUser, hostSessionId]);
 
   useEffect(() => {
+    if (isLoggedIn) return;
+    if (!roomId || !meetingReady || !hostAccessResolved) return;
+    if (hasJoinedRef.current) return;
+
+    const rememberedName = sessionStorage.getItem(`meeting-guest-name:${roomId}`) || myName;
+    if (!rememberedName || rememberedName === "Guest") return;
+
+    const timer = setTimeout(() => {
+      joinCall(roomId, rememberedName);
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [isLoggedIn, roomId, meetingReady, hostAccessResolved, myName, joinCall]);
+
+  useEffect(() => {
     return () => {
       hasJoinedRef.current = false;
 
@@ -756,8 +856,18 @@ export default function MeetingRoom() {
         cameraStreamRef.current.getTracks().forEach((track) => track.stop());
         cameraStreamRef.current = null;
       }
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((track) => track.stop());
+        screenStreamRef.current = null;
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (chatOpen) {
+      setUnreadChatCount(0);
+    }
+  }, [chatOpen]);
 
   const approveGuest = (client_id) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -827,11 +937,11 @@ export default function MeetingRoom() {
             <h2>Join Meeting</h2>
             <p className="setup-subtitle">Enter your name to request access from the host.</p>
           </div>
-          <div className="security-badge">
+          {/* <div className="security-badge">
             <span>Secured connection</span>
             <span className="security-separator">|</span>
             <span>Waiting room enabled</span>
-          </div>
+          </div> */}
           <input
             type="text"
             id="nameInput"
@@ -898,24 +1008,24 @@ export default function MeetingRoom() {
               </div>
             )}
           </div>
-          <div className="security-indicator room-pill">
+          {/* <div className="security-indicator room-pill">
             <FaLock />
             <span>Secured Connection</span>
-          </div>
+          </div> */}
         </div>
 
         {/* Waiting room requests (host only) */}
         {waitingUsers.length > 0 && (
           <div className="waiting-room-notification">
             <div className="waiting-room-heading">
-              <strong>Guest requests waiting approval</strong>
+              <strong>New user requests waiting approval</strong>
               <span>{waitingUsers.length} pending</span>
             </div>
             {waitingUsers.map((user) => (
               <div key={user.client_id} className="waiting-room-row">
                 <div>
                   <div className="waiting-user-name">{user.name || "Guest"}</div>
-                  <div className="waiting-user-subtitle">Ready to join this room</div>
+                  <div className="waiting-user-subtitle">Ready to join this meet</div>
                 </div>
                 <div className="waiting-room-actions">
                   <button className="approve-btn" onClick={() => approveGuest(user.client_id)}>Approve</button>
@@ -983,10 +1093,9 @@ export default function MeetingRoom() {
           isRecording={isRecording}
           captionsEnabled={captionsEnabled}
           chatOpen={chatOpen}
-          isMirrored={isMirrored}
+          unreadChatCount={unreadChatCount}
           onToggleMic={() => toggleMic()}
           onToggleCamera={() => toggleCamera()}
-          onToggleMirror={() => setIsMirrored((prev) => !prev)}
           onShareScreen={() => toggleScreenShare()}
           onRecord={() => (isRecording ? stopRecording() : setRecordingModalOpen(true))}
           onCaptions={() => setCaptionsEnabled(!captionsEnabled)}

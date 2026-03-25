@@ -3,7 +3,6 @@ import {
   FaClosedCaptioning,
   FaCommentDots,
   FaDesktop,
-  FaExchangeAlt,
   FaMicrophone,
   FaMicrophoneSlash,
   FaPhoneSlash,
@@ -19,10 +18,9 @@ const ControlsBar = ({
   isRecording,
   captionsEnabled,
   chatOpen,
-  isMirrored,
+  unreadChatCount = 0,
   onToggleMic,
   onToggleCamera,
-  onToggleMirror,
   onShareScreen,
   onRecord,
   onCaptions,
@@ -43,13 +41,6 @@ const ControlsBar = ({
       icon: isCameraOn ? <FaVideo /> : <FaVideoSlash />,
       onClick: onToggleCamera,
       active: isCameraOn,
-    },
-    {
-      key: "mirror",
-      label: isMirrored ? "Mirror On" : "Mirror Off",
-      icon: <FaExchangeAlt />,
-      onClick: onToggleMirror,
-      active: isMirrored,
     },
     {
       key: "screen",
@@ -94,6 +85,9 @@ const ControlsBar = ({
           >
             <span className="control-icon">{control.icon}</span>
             <span className="control-label">{control.label}</span>
+            {control.key === "chat" && unreadChatCount > 0 && (
+              <span className="control-badge">{unreadChatCount > 99 ? "99+" : unreadChatCount}</span>
+            )}
           </button>
         ))}
         <button type="button" className="control-button control-leave" onClick={onLeave}>
