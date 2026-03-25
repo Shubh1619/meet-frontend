@@ -36,7 +36,7 @@ export default function MeetingRoom() {
   const cameraStreamRef = useRef(null);
   const pcsRef = useRef({});
   const wsRef = useRef(null);
-  const myId = React.useId();
+  const myId = useRef(Math.random().toString(36).substring(7));
 
   // --- Join Call ---
   const joinCall = async (room, name) => {
@@ -152,7 +152,7 @@ export default function MeetingRoom() {
     const WS_SERVER = import.meta.env.VITE_WS_URL;
     const wsUrl = `${WS_SERVER}/ws/${room}`;
     const socket = new WebSocket(wsUrl);
-    wsRef.current = socket; 
+    wsRef.current = socket;
 
     socket.onopen = () => {
       socket.send(
@@ -169,8 +169,8 @@ export default function MeetingRoom() {
     socket.onmessage = async (e) => {
       if (e.data.includes('"type":"ping"')) return;
       const msg = JSON.parse(e.data);
-      if (msg.from === myId) return;
-
+      if (msg.from === myId.current) return;
+      
       let pc = pcsRef.current[msg.from];
       if (!pc && (msg.type === "offer" || msg.type === "join")) {
         pc = createPeerConnection(msg.from, msg.name, msg.audioEnabled, msg.videoEnabled);
