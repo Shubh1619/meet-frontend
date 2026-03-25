@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
+import { FaDoorOpen, FaLock, FaUsers, FaHourglassHalf } from "react-icons/fa";
 import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
 import RecordingModal from "./RecordingModal";
@@ -9,13 +10,15 @@ import "./MeetingRoom.css";
 export default function MeetingRoom() {
   // --- State ---
   const { roomId } = useParams();
-  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+  const initialStoredUser = JSON.parse(localStorage.getItem("user") || "null");
   const isLoggedIn = Boolean(localStorage.getItem("token"));
 
   const [setupVisible, setSetupVisible] = useState(true);
   const [roomVisible, setRoomVisible] = useState(false);
   const [roomName, setRoomName] = useState("Room Name");
-  const [myName, setMyName] = useState(storedUser?.name || "Guest");
+  const [profileUser, setProfileUser] = useState(initialStoredUser);
+  const [profileReady, setProfileReady] = useState(!isLoggedIn);
+  const [myName, setMyName] = useState(initialStoredUser?.name || "Guest");
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [waitingUsers, setWaitingUsers] = useState([]);
   const [waitMessage, setWaitMessage] = useState("");
@@ -61,13 +64,63 @@ export default function MeetingRoom() {
     }
   }, [isLoggedIn]);
 
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setProfileReady(true);
+      return;
+    }
+
+    let ignore = false;
+
+    async function syncProfile() {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/user`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to refresh profile");
+        }
+
+        const data = await response.json();
+        if (ignore) return;
+
+        setProfileUser(data);
+        setMyName(data?.name || initialStoredUser?.name || "Host");
+        localStorage.setItem("user", JSON.stringify(data));
+      } catch (error) {
+        if (!ignore) {
+          console.error("Failed to refresh meeting profile:", error);
+          setMyName(initialStoredUser?.name || "Host");
+        }
+      } finally {
+        if (!ignore) {
+          setProfileReady(true);
+        }
+      }
+    }
+
+    syncProfile();
+
+    return () => {
+      ignore = true;
+    };
+  }, [isLoggedIn, initialStoredUser?.name]);
+
   // --- Local Stream Handler ---
   const setLocalStreamHandler = useCallback((stream, displayName = myName) => {
     localStreamRef.current = stream;
     setParticipants((prev) => {
       const exists = prev.find((p) => p.id === "you");
       if (exists) {
-        return prev.map((p) => (p.id === "you" ? { ...p, stream } : p));
+        return prev.map((p) => (
+          p.id === "you"
+            ? { ...p, name: displayName, stream }
+            : p
+        ));
       } else {
         return [...prev, { id: "you", name: displayName, stream, audioEnabled: true, videoEnabled: true, isLocal: true }];
       }
@@ -236,16 +289,45 @@ export default function MeetingRoom() {
       switch (msg.type) {
         case "waiting-user":
           setWaitingUsers((prev) => {
-            if (prev.find((u) => u.client_id === msg.client_id)) return prev;
-            return [...prev, { client_id: msg.client_id, name: msg.name }];
+            const existing = prev.find((u) => u.client_id === msg.client_id);
+            if (existing) {
+              return prev.map((u) => (
+                u.client_id === msg.client_id
+                  ? { ...u, name: msg.name || u.name }
+                  : u
+              ));
+            }
+            return [...prev, { client_id: msg.client_id, name: msg.name || "Guest" }];
           });
           return;
 
         case "user-joined":
           if (msg.id === myId.current) return;
           setParticipants((prev) => {
-            if (prev.some((p) => p.id === msg.id)) return prev;
-            return [...prev, { id: msg.id, name: msg.name, isLocal: false, audioEnabled: true, videoEnabled: true }];
+            const existing = prev.find((p) => p.id === msg.id);
+            if (existing) {
+              return prev.map((p) => (
+                p.id === msg.id
+                  ? {
+                      ...p,
+                      name: msg.name || p.name,
+                      audioEnabled: msg.audioEnabled ?? p.audioEnabled ?? true,
+                      videoEnabled: msg.videoEnabled ?? p.videoEnabled ?? true,
+                    }
+                  : p
+              ));
+            }
+
+            return [
+              ...prev,
+              {
+                id: msg.id,
+                name: msg.name || "Guest",
+                isLocal: false,
+                audioEnabled: msg.audioEnabled ?? true,
+                videoEnabled: msg.videoEnabled ?? true,
+              },
+            ];
           });
 
           if (!pcsRef.current[msg.id]) {
@@ -342,7 +424,9 @@ export default function MeetingRoom() {
     if (hasJoinedRef.current) return;
     hasJoinedRef.current = true;
 
-    const resolvedName = isLoggedIn ? (storedUser?.name || myName || "Host") : (name || myName || "Guest");
+    const resolvedName = isLoggedIn
+      ? (profileUser?.name || myName || "Host")
+      : (name || myName || "Guest");
     setMyName(resolvedName);
     setSetupVisible(false);
 
@@ -381,17 +465,17 @@ export default function MeetingRoom() {
     }
 
     connectWebSocket(room, resolvedName, isLoggedIn);
-  }, [roomId, isLoggedIn, storedUser?.name, myName, connectWebSocket, setLocalStreamHandler]);
+  }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler]);
 
   useEffect(() => {
-    if (isLoggedIn && roomId) {
+    if (isLoggedIn && roomId && profileReady) {
       const timer = setTimeout(() => {
-        joinCall(roomId, storedUser?.name || "Host");
+        joinCall(roomId, profileUser?.name || myName || "Host");
       }, 0);
 
       return () => clearTimeout(timer);
     }
-  }, [isLoggedIn, roomId, storedUser?.name, joinCall]);
+  }, [isLoggedIn, roomId, profileReady, profileUser?.name, myName, joinCall]);
 
   useEffect(() => {
     return () => {
@@ -451,11 +535,25 @@ export default function MeetingRoom() {
     return () => clearInterval(interval);
   }, [captionsEnabled, activeSpeakerId]);
 
+  const localParticipant = participants.find((participant) => participant.id === "you");
+  const waitingCount = waitingUsers.length;
+
   // --- Render ---
+  if (isLoggedIn && !profileReady) {
+    return (
+      <div className="meeting-room-shell">
+        <div className="meeting-state-card">
+          <h2>Loading your meeting profile</h2>
+          <p>Syncing your latest user details before joining the room.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (setupVisible && !isLoggedIn) {
     return (
-      <div id="setup">
-        <div className="setup-container">
+      <div id="setup" className="meeting-room-shell">
+        <div className="setup-container meeting-state-card">
           <div className="setup-header">
             <i className="fas fa-video"></i>
             <h2>AI for IA Meeting</h2>
@@ -482,51 +580,68 @@ export default function MeetingRoom() {
 
   if (isInWaitingRoom) {
     return (
-      <div style={{ textAlign: "center", margin: "120px auto" }}>
+      <div className="meeting-room-shell">
+        <div className="meeting-state-card">
+          <div className="meeting-state-icon">
+            <FaHourglassHalf />
+          </div>
         <h2>Waiting for host approval</h2>
         <p>{waitMessage || "Please wait while the host approves your entry."}</p>
+      </div>
       </div>
     );
   }
 
   if (roomVisible) {
     return (
-      <div id="room">
+      <div id="room" className="meeting-room-shell">
         {/* Header */}
         <div className="room-header">
           <div className="room-info">
-            <div className="room-name">
-              <i className="fas fa-door-open"></i>
+            <div className="room-pill room-name">
+              <FaDoorOpen />
               <span>{roomName}</span>
             </div>
-            <div className="participant-count">
-              <i className="fas fa-users"></i>
+            <div className="room-pill participant-count">
+              <FaUsers />
               <span>{participants.length} participant(s)</span>
             </div>
+            {waitingCount > 0 && (
+              <div className="room-pill waiting-pill">
+                <FaHourglassHalf />
+                <span>{waitingCount} waiting</span>
+              </div>
+            )}
             {isRecording && (
-              <div className="recording-indicator">
-                <i className="fas fa-circle"></i>
+              <div className="room-pill recording-indicator">
+                <span className="recording-dot" />
                 <span>Recording {recordingTimer}</span>
               </div>
             )}
           </div>
-          <div className="security-indicator">
-            <i className="fas fa-lock"></i>
+          <div className="security-indicator room-pill">
+            <FaLock />
             <span>Secured Connection</span>
           </div>
         </div>
 
         {/* Waiting room requests (host only) */}
         {waitingUsers.length > 0 && (
-          <div className="waiting-room-notification" style={{ padding: "10px", background: "#fffae5", border: "1px solid #ffecb5", margin: "12px" }}>
-            <strong>Guest requests waiting approval:</strong>
+          <div className="waiting-room-notification">
+            <div className="waiting-room-heading">
+              <strong>Guest requests waiting approval</strong>
+              <span>{waitingUsers.length} pending</span>
+            </div>
             {waitingUsers.map((user) => (
-              <div key={user.client_id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "6px" }}>
-                <span>{user.name}</span>
-                <span style={{ display: "flex", gap: "6px" }}>
-                  <button onClick={() => approveGuest(user.client_id)}>Approve</button>
-                  <button onClick={() => denyGuest(user.client_id)}>Deny</button>
-                </span>
+              <div key={user.client_id} className="waiting-room-row">
+                <div>
+                  <div className="waiting-user-name">{user.name || "Guest"}</div>
+                  <div className="waiting-user-subtitle">Ready to join this room</div>
+                </div>
+                <div className="waiting-room-actions">
+                  <button className="approve-btn" onClick={() => approveGuest(user.client_id)}>Approve</button>
+                  <button className="deny-btn" onClick={() => denyGuest(user.client_id)}>Deny</button>
+                </div>
               </div>
             ))}
           </div>
@@ -580,6 +695,12 @@ export default function MeetingRoom() {
 
         {/* Controls */}
         <ControlsBar
+          isMicOn={localParticipant?.audioEnabled ?? true}
+          isCameraOn={localParticipant?.videoEnabled ?? true}
+          isSharingScreen={isScreenSharing}
+          isRecording={isRecording}
+          captionsEnabled={captionsEnabled}
+          chatOpen={chatOpen}
           onToggleMic={() => toggleMic()}
           onToggleCamera={() => toggleCamera()}
           onShareScreen={() => toggleScreenShare()}
