@@ -20,7 +20,7 @@ export default function Register() {
   const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
   const mutedColor = darkMode ? "#888" : "#606074";
 
-  // If already logged in → redirect to dashboard
+  // If already logged in, redirect to dashboard.
   useEffect(() => {
     if (localStorage.getItem("token")) {
       nav("/dashboard");
@@ -50,46 +50,9 @@ export default function Register() {
         throw new Error(data.detail || "Registration failed");
       }
 
-      // Registration successful → auto login
-      const loginForm = new URLSearchParams();
-      loginForm.append("grant_type", "password");
-      loginForm.append("username", email);
-      loginForm.append("password", pass);
-      loginForm.append("scope", "");
-      loginForm.append("client_id", "string");
-      loginForm.append("client_secret", "string");
-
-      const loginRes = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: loginForm,
+      nav("/login", {
+        state: { message: "Registration successful. Please login to continue." },
       });
-
-      const loginData = await loginRes.json();
-
-      if (!loginRes.ok) {
-        throw new Error(loginData.detail || "Auto login failed");
-      }
-
-      // Save token
-      localStorage.setItem("token", loginData.access_token);
-
-      // Fetch user info and save to localStorage
-      try {
-        const userRes = await fetch(`${import.meta.env.VITE_API_URL}/auth/user`, {
-          headers: {
-            Authorization: `Bearer ${loginData.access_token}`,
-          },
-        });
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          localStorage.setItem("user", JSON.stringify(userData));
-        }
-      } catch (e) {
-        console.error("Failed to fetch user info:", e);
-      }
-
-      nav("/dashboard");
     } catch (error) {
       setErr(error.message);
     }
@@ -120,7 +83,6 @@ export default function Register() {
           textAlign: "center",
         }}
       >
-        {/* Logo */}
         <div
           style={{
             display: "flex",
@@ -152,7 +114,7 @@ export default function Register() {
         </div>
 
         <h2 style={{ marginBottom: "0.5rem", color: textColor }}>
-          Create Your Account ✨
+          Create Your Account
         </h2>
 
         {err && (
@@ -170,25 +132,39 @@ export default function Register() {
         )}
 
         <form onSubmit={submit} style={{ textAlign: "left" }}>
-          <label className="small-muted" style={{ color: mutedColor }}>Name</label>
+          <label className="small-muted" style={{ color: mutedColor }}>
+            Name
+          </label>
           <input
             className="input mt-1"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: darkMode ? "#333" : "#ddd" }}
+            style={{
+              background: darkMode ? "#0f0f23" : "#fff",
+              color: textColor,
+              borderColor: darkMode ? "#333" : "#ddd",
+            }}
           />
 
-          <label className="small-muted mt-1" style={{ color: mutedColor }}>Email</label>
+          <label className="small-muted mt-1" style={{ color: mutedColor }}>
+            Email
+          </label>
           <input
             className="input mt-1"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: darkMode ? "#333" : "#ddd" }}
+            style={{
+              background: darkMode ? "#0f0f23" : "#fff",
+              color: textColor,
+              borderColor: darkMode ? "#333" : "#ddd",
+            }}
           />
 
-          <label className="small-muted mt-1" style={{ color: mutedColor }}>Password</label>
+          <label className="small-muted mt-1" style={{ color: mutedColor }}>
+            Password
+          </label>
           <div style={{ position: "relative" }}>
             <input
               type={showPassword ? "text" : "password"}
@@ -196,7 +172,13 @@ export default function Register() {
               value={pass}
               onChange={(e) => setPass(e.target.value)}
               required
-              style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: darkMode ? "#333" : "#ddd", width: "100%", paddingRight: "45px" }}
+              style={{
+                background: darkMode ? "#0f0f23" : "#fff",
+                color: textColor,
+                borderColor: darkMode ? "#333" : "#ddd",
+                width: "100%",
+                paddingRight: "45px",
+              }}
             />
             <span
               onClick={() => setShowPassword(!showPassword)}
