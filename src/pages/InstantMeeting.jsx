@@ -4,6 +4,32 @@ import ActionButton from "../components/ActionButton";
 import { apiPost } from "../api";
 import { useDarkMode } from "../context/DarkModeContext";
 
+const PUBLIC_MEETING_BASE = (import.meta.env.VITE_PUBLIC_APP_URL || "https://meet-frontend-4op.pages.dev")
+  .trim()
+  .replace(/\/$/, "");
+
+function normalizeJoinLink(rawJoinLink, roomId) {
+  if (!rawJoinLink && roomId) {
+    return `${PUBLIC_MEETING_BASE}/meeting/${roomId}`;
+  }
+
+  if (!rawJoinLink) return "";
+
+  try {
+    const parsed = new URL(rawJoinLink);
+    const isLocal =
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "0.0.0.0";
+
+    if (!isLocal) return rawJoinLink;
+
+    return `${PUBLIC_MEETING_BASE}${parsed.pathname}`;
+  } catch {
+    return rawJoinLink;
+  }
+}
+
 export default function InstantMeeting() {
   const { darkMode } = useDarkMode();
   const [title, setTitle] = useState("");
@@ -52,9 +78,8 @@ export default function InstantMeeting() {
       //   participants: []
       // }
 
-      setMeetingLink(res.join_link);
-
       const roomId = res.room_id || res.join_link?.match(/\/meeting\/([^/]+)/)?.[1];
+      setMeetingLink(normalizeJoinLink(res.join_link, roomId));
       if (roomId && res.host_session_id) {
         sessionStorage.setItem(`meeting-host-session:${roomId}`, res.host_session_id);
       }
