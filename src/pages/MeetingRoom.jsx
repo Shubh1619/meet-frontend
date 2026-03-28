@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaDoorOpen, FaUsers, FaHourglassHalf } from "react-icons/fa";
+import { FaDoorOpen, FaUsers, FaHourglassHalf, FaLock } from "react-icons/fa";
 import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
 import RecordingModal from "./RecordingModal";
@@ -36,7 +36,7 @@ export default function MeetingRoom() {
   const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isMirrored] = useState(true);
-  const [connectionStatus, setConnectionStatus] = useState("disconnected"); // Added for debugging
+  const [connectionStatus, setConnectionStatus] = useState("disconnected");
 
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -74,6 +74,7 @@ export default function MeetingRoom() {
   const recordingStreamRef = useRef(null);
   const recordingChunksRef = useRef([]);
   const recordingStartedAtRef = useRef(null);
+  const pendingCandidatesRef = useRef({});
 
   // --- Responsive Detection ---
   useEffect(() => {
@@ -320,22 +321,7 @@ export default function MeetingRoom() {
 
   // --- Local Stream Handler ---
   const setLocalStreamHandler = useCallback((stream, displayName = myName) => {
-    console.log("Setting local stream for:", displayName);
     localStreamRef.current = stream;
-    
-    // Ensure video tracks are enabled
-    const videoTrack = stream.getVideoTracks()[0];
-    const audioTrack = stream.getAudioTracks()[0];
-    
-    if (videoTrack) {
-      console.log("Video track enabled:", videoTrack.enabled);
-      videoTrack.onended = () => console.log("Video track ended");
-    }
-    if (audioTrack) {
-      console.log("Audio track enabled:", audioTrack.enabled);
-      audioTrack.onended = () => console.log("Audio track ended");
-    }
-    
     setParticipants((prev) => {
       const exists = prev.find((p) => p.id === "you");
       if (exists) {
@@ -391,7 +377,6 @@ export default function MeetingRoom() {
     const track = stream.getAudioTracks()[0];
     if (!track) return;
     track.enabled = !track.enabled;
-    console.log("Mic toggled:", track.enabled);
     setParticipants((prev) =>
       prev.map((p) => (p.id === "you" ? { ...p, audioEnabled: track.enabled } : p))
     );
@@ -404,7 +389,6 @@ export default function MeetingRoom() {
     const track = stream.getVideoTracks()[0];
     if (!track) return;
     track.enabled = !track.enabled;
-    console.log("Camera toggled:", track.enabled);
     setParticipants((prev) =>
       prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: track.enabled } : p))
     );
@@ -632,45 +616,38 @@ export default function MeetingRoom() {
   // --- Peer Connection ---
   const shouldInitiateConnection = useCallback((remoteId) => {
     if (!myId.current || !remoteId) return false;
-    return myId.current.localeCompare(remoteId) < 0;
+    return myId.current < remoteId;
   }, []);
 
   const createPeerConnection = useCallback((remoteId, remoteName, audioEnabled, videoEnabled) => {
-    console.log("Creating peer connection for:", remoteName);
     const pc = new RTCPeerConnection({
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
       ],
       iceCandidatePoolSize: 10,
     });
+    
     pcsRef.current[remoteId] = pc;
+    pendingCandidatesRef.current[remoteId] = [];
 
-    // Add local tracks to peer connection
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
-        console.log("Adding track to peer connection:", track.kind, track.enabled);
         pc.addTrack(track, localStreamRef.current);
       });
     }
 
     pc.ontrack = (e) => {
-      console.log("Received track from:", remoteName, "track kind:", e.track.kind);
       const stream = e.streams[0];
-      const nextAudioEnabled = typeof audioEnabled === "boolean"
-        ? audioEnabled
-        : (stream.getAudioTracks()[0]?.enabled ?? true);
-      const nextVideoEnabled = typeof videoEnabled === "boolean"
-        ? videoEnabled
-        : (stream.getVideoTracks()[0]?.enabled ?? true);
-      
       setParticipants((prev) => {
         const exists = prev.find((p) => p.id === remoteId);
         if (exists) {
           return prev.map((p) => (
             p.id === remoteId
-              ? { ...p, stream, audioEnabled: nextAudioEnabled, videoEnabled: nextVideoEnabled }
+              ? { ...p, stream, audioEnabled: true, videoEnabled: true }
               : p
           ));
         } else {
@@ -680,8 +657,8 @@ export default function MeetingRoom() {
               id: remoteId,
               name: remoteName,
               stream,
-              audioEnabled: nextAudioEnabled,
-              videoEnabled: nextVideoEnabled,
+              audioEnabled: true,
+              videoEnabled: true,
             },
           ];
         }
@@ -691,40 +668,31 @@ export default function MeetingRoom() {
 
     pc.onicecandidate = (e) => {
       if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-        console.log("Sending ICE candidate for:", remoteName);
-        wsRef.current.send(JSON.stringify({ type: "candidate", candidate: e.candidate, from: myId.current, to: remoteId }));
+        wsRef.current.send(JSON.stringify({ 
+          type: "candidate", 
+          candidate: e.candidate, 
+          from: myId.current, 
+          to: remoteId 
+        }));
       }
     };
 
     pc.oniceconnectionstatechange = () => {
-      console.log("ICE connection state for", remoteName, ":", pc.iceConnectionState);
-      if (pc.iceConnectionState === "connected") {
+      const state = pc.iceConnectionState;
+      if (state === "connected") {
         setConnectionStatus("connected");
-      } else if (pc.iceConnectionState === "failed") {
+      } else if (state === "failed") {
         console.error("ICE connection failed for:", remoteName);
-        setConnectionStatus("failed");
-      }
-    };
-
-    pc.onnegotiationneeded = async () => {
-      console.log("Negotiation needed for:", remoteName);
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        wsRef.current?.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: remoteId, name: myName }));
-      } catch (error) {
-        console.error("Negotiation error:", error);
       }
     };
 
     return pc;
-  }, [myName]);
+  }, []);
 
   // --- WebSocket ---
   const connectWebSocket = useCallback((room, participantName, hostMode, sessionId = "") => {
     const WS_SERVER = import.meta.env.VITE_WS_URL || "ws://localhost:8080";
     const wsUrl = `${WS_SERVER}/ws/${room}`;
-    console.log("Connecting to WebSocket:", wsUrl);
 
     if (wsRef.current) {
       wsRef.current.onclose = null;
@@ -735,31 +703,28 @@ export default function MeetingRoom() {
     wsRef.current = socket;
 
     socket.onopen = () => {
-      console.log("WebSocket connected");
       setConnectionStatus("connected");
       const joinType = hostMode ? "host-join" : "waiting-room-request";
-      const joinMessage = {
-        type: joinType,
-        from: myId.current,
-        name: participantName,
-        session_id: sessionId,
-        token: hostMode ? (localStorage.getItem("token") || "") : "",
-        audioEnabled: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? true,
-        videoEnabled: localStreamRef.current?.getVideoTracks()[0]?.enabled ?? true,
-      };
-      console.log("Sending join message:", joinType);
-      socket.send(JSON.stringify(joinMessage));
+      socket.send(
+        JSON.stringify({
+          type: joinType,
+          from: myId.current,
+          name: participantName,
+          session_id: sessionId,
+          token: hostMode ? (localStorage.getItem("token") || "") : "",
+          audioEnabled: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? true,
+          videoEnabled: localStreamRef.current?.getVideoTracks()[0]?.enabled ?? true,
+        })
+      );
     };
 
     socket.onmessage = async (e) => {
       if (e.data.includes('"type":"ping"')) return;
       const msg = JSON.parse(e.data);
-      console.log("WebSocket message received:", msg.type, msg);
       if (msg.from === myId.current) return;
 
       let pc = pcsRef.current[msg.from];
       if (!pc && (msg.type === "offer" || msg.type === "join")) {
-        console.log("Creating peer connection for incoming message from:", msg.name);
         pc = createPeerConnection(msg.from, msg.name, msg.audioEnabled, msg.videoEnabled);
       }
 
@@ -776,11 +741,10 @@ export default function MeetingRoom() {
             }
             return [...prev, { client_id: msg.client_id, name: msg.name || "Guest" }];
           });
-          return;
+          break;
 
         case "user-joined":
-          console.log("User joined:", msg.name, msg.id);
-          if (msg.id === myId.current) return;
+          if (msg.id === myId.current) break;
           setParticipants((prev) => {
             const existing = prev.find((p) => p.id === msg.id);
             if (existing) {
@@ -795,7 +759,6 @@ export default function MeetingRoom() {
                   : p
               ));
             }
-
             return [
               ...prev,
               {
@@ -809,29 +772,32 @@ export default function MeetingRoom() {
           });
 
           if (!pcsRef.current[msg.id] && shouldInitiateConnection(msg.id)) {
-            console.log("Initiating connection with:", msg.name);
             const peer = createPeerConnection(msg.id, msg.name, true, true);
             try {
               const offer = await peer.createOffer();
               await peer.setLocalDescription(offer);
-              wsRef.current?.send(JSON.stringify({ ...peer.localDescription.toJSON(), from: myId.current, to: msg.id, name: participantName }));
+              wsRef.current?.send(JSON.stringify({ 
+                ...peer.localDescription.toJSON(), 
+                from: myId.current, 
+                to: msg.id, 
+                name: participantName 
+              }));
             } catch (error) {
               console.error("Error creating offer:", error);
             }
           }
-          return;
+          break;
 
         case "waiting":
           setIsInWaitingRoom(true);
           setWaitMessage(msg.message || "Waiting for host approval...");
-          return;
+          break;
 
         case "approved":
-          console.log("Approved to join meeting");
           setIsInWaitingRoom(false);
           setRoomVisible(true);
           setWaitMessage("");
-          return;
+          break;
 
         case "denied":
           alert(msg.message || "Your entry was denied by the host.");
@@ -839,7 +805,7 @@ export default function MeetingRoom() {
           setSetupVisible(true);
           setRoomVisible(false);
           setWaitMessage("");
-          return;
+          break;
 
         case "update-state":
           setParticipants((prev) =>
@@ -849,58 +815,80 @@ export default function MeetingRoom() {
                 : p
             )
           );
-          return;
+          break;
 
         case "join": {
-          console.log("Received join from:", msg.name);
           try {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-            socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: participantName }));
+            socket.send(JSON.stringify({ 
+              ...pc.localDescription.toJSON(), 
+              from: myId.current, 
+              to: msg.from, 
+              name: participantName 
+            }));
           } catch (error) {
             console.error("Error handling join:", error);
           }
           break;
         }
+        
         case "offer": {
-          console.log("Received offer from:", msg.name);
           try {
             await pc.setRemoteDescription(new RTCSessionDescription(msg));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
-            socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: participantName }));
+            socket.send(JSON.stringify({ 
+              ...pc.localDescription.toJSON(), 
+              from: myId.current, 
+              to: msg.from, 
+              name: participantName 
+            }));
           } catch (error) {
             console.error("Error handling offer:", error);
           }
           break;
         }
+        
         case "answer":
-          console.log("Received answer from:", msg.name);
           await pc.setRemoteDescription(new RTCSessionDescription(msg));
           break;
+          
         case "candidate":
           if (pc) {
-            console.log("Adding ICE candidate from:", msg.name);
-            await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+            if (pc.remoteDescription) {
+              await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+            } else {
+              pendingCandidatesRef.current[msg.from]?.push(msg.candidate);
+            }
           }
           break;
+          
         case "chat-message":
-          setMessages((prev) => [...prev, { from: msg.name, text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
+          setMessages((prev) => [...prev, { 
+            from: msg.name, 
+            text: msg.message, 
+            time: new Date().toLocaleTimeString(), 
+            own: false 
+          }]);
           setUnreadChatCount((count) => (chatOpen ? count : count + 1));
           break;
+          
         case "waiting-user-left":
           setWaitingUsers((prev) => prev.filter((user) => user.client_id !== msg.client_id));
           break;
+          
         case "removed":
           alert(msg.message || "You were removed from the meeting.");
           leaveMeeting();
-          return;
+          break;
+          
         case "host-left":
           alert(msg.message || "The host has left the meeting.");
           leaveMeeting();
-          return;
+          break;
+          
         case "user-left":
-          console.log("User left:", msg.id);
           if (pcsRef.current[msg.id]) {
             pcsRef.current[msg.id].close();
             delete pcsRef.current[msg.id];
@@ -912,7 +900,6 @@ export default function MeetingRoom() {
     };
 
     socket.onclose = () => {
-      console.log("WebSocket disconnected");
       setConnectionStatus("disconnected");
       if (captionsEnabled) setCaptionsEnabled(false);
       if (isRecording) setIsRecording(false);
@@ -923,7 +910,6 @@ export default function MeetingRoom() {
 
       reconnectTimeoutRef.current = setTimeout(() => {
         if (hasJoinedRef.current && reconnectFnRef.current) {
-          console.log("Attempting to reconnect...");
           reconnectFnRef.current(room, participantName, hostMode, sessionId);
         }
       }, 5000);
@@ -933,7 +919,7 @@ export default function MeetingRoom() {
       console.error("WebSocket error:", error);
       setConnectionStatus("error");
     };
-  }, [captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting, myName]);
+  }, [captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting]);
 
   useEffect(() => {
     reconnectFnRef.current = connectWebSocket;
@@ -976,18 +962,25 @@ export default function MeetingRoom() {
     }
   }, [roomId]);
 
-  // --- Optimized Grid Layout - REDUCED CAMERA GRID ---
+  // --- Optimized Grid Layout ---
   const getOptimalGridColumns = useCallback(() => {
     const participantCount = participants.length;
     
-    // REDUCED: Maximum 2 columns on all devices for better visibility
     if (isMobile) {
-      return 1; // Single column on mobile
+      return 1;
     }
     
-    // Maximum 2 columns on desktop as well for larger video tiles
-    return Math.min(participantCount, 2);
-  }, [isMobile, participants.length]);
+    if (isTablet) {
+      if (participantCount === 1) return 1;
+      if (participantCount <= 2) return 2;
+      return 2;
+    }
+    
+    // Desktop - max 3 columns for better visibility
+    if (participantCount === 1) return 1;
+    if (participantCount === 2) return 2;
+    return Math.min(participantCount, 3);
+  }, [isMobile, isTablet, participants.length]);
 
   // --- Join Call ---
   const joinCall = useCallback(async (room = roomId || "default-room", name) => {
@@ -1005,7 +998,6 @@ export default function MeetingRoom() {
     if (hostMode) {
       setRoomVisible(true);
       setIsInWaitingRoom(false);
-      console.log("Host auto join, using profile identity:", resolvedName);
     } else {
       setRoomVisible(false);
       setIsInWaitingRoom(true);
@@ -1023,27 +1015,17 @@ export default function MeetingRoom() {
         sessionId = await ensureGuestSession(resolvedName);
       }
 
-      console.log("Requesting camera and microphone access...");
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { width: { ideal: 1280 }, height: { ideal: 720 } }, 
         audio: { echoCancellation: true, noiseSuppression: true } 
       });
       cameraStreamRef.current = stream;
-      
-      console.log("Media stream obtained. Video tracks:", stream.getVideoTracks().length);
-      console.log("Audio tracks:", stream.getAudioTracks().length);
 
       const savedMic = sessionStorage.getItem("micMuted") === "true";
       const savedCam = sessionStorage.getItem("cameraOff") === "true";
 
-      if (stream.getAudioTracks()[0] && savedMic) {
-        stream.getAudioTracks()[0].enabled = false;
-        console.log("Mic muted from saved preference");
-      }
-      if (stream.getVideoTracks()[0] && savedCam) {
-        stream.getVideoTracks()[0].enabled = false;
-        console.log("Camera off from saved preference");
-      }
+      if (stream.getAudioTracks()[0] && savedMic) stream.getAudioTracks()[0].enabled = false;
+      if (stream.getVideoTracks()[0] && savedCam) stream.getVideoTracks()[0].enabled = false;
 
       setLocalStreamHandler(stream, resolvedName);
       monitorAudioLevel(stream, "localVideoContainer");
@@ -1225,34 +1207,36 @@ export default function MeetingRoom() {
   const renderVideoGrid = useCallback(() => {
     const filteredParticipants = participants.filter(p => !pinnedParticipantId || p.id === pinnedParticipantId);
     const columns = getOptimalGridColumns();
-    const participantCount = filteredParticipants.length;
     
     return (
       <div 
         id="videos" 
-        className={`participant-grid participants-${Math.min(participantCount, 9)}`}
+        className={`participant-grid participants-${Math.min(filteredParticipants.length, 9)}`}
         style={{
-          gridTemplateColumns: isMobile ? '1fr' : `repeat(${columns}, minmax(400px, 1fr))`,
-          gap: '20px',
-          maxWidth: '1400px',
-          margin: '0 auto'
+          gridTemplateColumns: isMobile ? '1fr' : `repeat(${columns}, minmax(300px, 1fr))`
         }}
       >
         {filteredParticipants.map((p) => (
           <VideoTile
             key={p.id}
-            {...p}
+            id={p.id}
+            name={p.name}
+            isLocal={p.isLocal}
+            stream={p.stream}
+            audioEnabled={p.audioEnabled}
+            videoEnabled={p.videoEnabled}
             captions={captions[p.id]}
             isPinned={p.id === pinnedParticipantId}
             isFeatured={p.id === pinnedParticipantId}
             isMirrored={p.isLocal ? isMirrored : false}
             onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
             isMobile={isMobile}
+            connectionState={connectionStatus}
           />
         ))}
       </div>
     );
-  }, [participants, pinnedParticipantId, captions, isMirrored, isMobile, getOptimalGridColumns]);
+  }, [participants, pinnedParticipantId, captions, isMirrored, isMobile, getOptimalGridColumns, connectionStatus]);
 
   // --- Render ---
   if ((isLoggedIn && !profileReady) || !meetingReady || !hostAccessResolved) {
@@ -1261,11 +1245,6 @@ export default function MeetingRoom() {
         <div className="meeting-state-card">
           <h2>Loading your meeting profile</h2>
           <p>Checking room access and syncing the correct host identity before joining.</p>
-          {connectionStatus !== "connected" && (
-            <p style={{ fontSize: '0.875rem', marginTop: '16px', color: '#666' }}>
-              Connection status: {connectionStatus}
-            </p>
-          )}
         </div>
       </div>
     );
@@ -1345,15 +1324,19 @@ export default function MeetingRoom() {
           zIndex: 100,
           padding: '4px 8px',
           borderRadius: '8px',
-          background: connectionStatus === 'connected' ? 'rgba(34, 197, 94, 0.9)' : 'rgba(239, 68, 68, 0.9)',
+          background: connectionStatus === 'connected' ? 'rgba(34, 197, 94, 0.9)' : 
+                      connectionStatus === 'connecting' ? 'rgba(251, 191, 36, 0.9)' : 
+                      'rgba(239, 68, 68, 0.9)',
           color: 'white',
           fontSize: '12px',
           fontWeight: 'bold'
         }}>
-          {connectionStatus === 'connected' ? '● Connected' : '○ Disconnected'}
+          {connectionStatus === 'connected' ? '● Connected' : 
+           connectionStatus === 'connecting' ? '◐ Connecting' : 
+           '○ Disconnected'}
         </div>
 
-        {/* Header with auto-hide on mobile */}
+        {/* Header */}
         <div 
           className="room-header" 
           style={{
@@ -1384,6 +1367,9 @@ export default function MeetingRoom() {
                 <span>Recording {recordingTimer}</span>
               </div>
             )}
+            <div className={`room-pill ${connectionStatus === 'connected' ? 'connected' : 'disconnected'}`}>
+              {connectionStatus === 'connected' ? '🔗 Connected' : '🔌 Disconnected'}
+            </div>
           </div>
         </div>
 
@@ -1421,7 +1407,12 @@ export default function MeetingRoom() {
                 .map((p) => (
                   <VideoTile
                     key={p.id}
-                    {...p}
+                    id={p.id}
+                    name={p.name}
+                    isLocal={p.isLocal}
+                    stream={p.stream}
+                    audioEnabled={p.audioEnabled}
+                    videoEnabled={p.videoEnabled}
                     captions={captions[p.id]}
                     isPinned={false}
                     isMirrored={p.isLocal ? isMirrored : false}
@@ -1433,7 +1424,7 @@ export default function MeetingRoom() {
           )}
         </div>
 
-        {/* Controls with auto-hide on mobile */}
+        {/* Controls */}
         <div 
           className="controls-dock"
           style={{
