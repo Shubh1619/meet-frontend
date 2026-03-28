@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaDoorOpen, FaUsers, FaHourglassHalf, FaLock } from "react-icons/fa";
+import { FaDoorOpen, FaUsers, FaHourglassHalf, FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaDesktop, FaRecordVinyl, FaClosedCaptioning, FaComment, FaSignOutAlt } from "react-icons/fa";
 import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
 import RecordingModal from "./RecordingModal";
@@ -26,9 +26,7 @@ export default function MeetingRoom() {
   const [guestSessionId, setGuestSessionId] = useState("");
   const [isHostUser, setIsHostUser] = useState(false);
   const [hostAccessResolved, setHostAccessResolved] = useState(!isLoggedIn);
-  const [myName, setMyName] = useState(
-    initialStoredUser?.name || sessionStorage.getItem(`meeting-guest-name:${roomId}`) || "Guest"
-  );
+  const [myName, setMyName] = useState(initialStoredUser?.name || sessionStorage.getItem(`meeting-guest-name:${roomId}`) || "");
   const [isInWaitingRoom, setIsInWaitingRoom] = useState(false);
   const [waitingUsers, setWaitingUsers] = useState([]);
   const [waitMessage, setWaitMessage] = useState("");
@@ -36,7 +34,6 @@ export default function MeetingRoom() {
   const [pinnedParticipantId, setPinnedParticipantId] = useState(null);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isMirrored] = useState(true);
-  const [connectionStatus, setConnectionStatus] = useState("disconnected");
 
   const [chatOpen, setChatOpen] = useState(false);
   const [messages, setMessages] = useState([]);
@@ -53,13 +50,6 @@ export default function MeetingRoom() {
   const [captions, setCaptions] = useState({});
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
 
-  // --- Responsive State ---
-  const [isMobile, setIsMobile] = useState(false);
-  const [isTablet, setIsTablet] = useState(false);
-  const [orientation, setOrientation] = useState('portrait');
-  const [showControls, setShowControls] = useState(true);
-  const controlsTimeoutRef = useRef(null);
-
   // --- Media/WebRTC ---
   const localStreamRef = useRef(null);
   const cameraStreamRef = useRef(null);
@@ -74,56 +64,17 @@ export default function MeetingRoom() {
   const recordingStreamRef = useRef(null);
   const recordingChunksRef = useRef([]);
   const recordingStartedAtRef = useRef(null);
-  const pendingCandidatesRef = useRef({});
 
-  // --- Responsive Detection ---
+  // Check if device is mobile
+  const isMobile = useRef(window.innerWidth <= 767);
+
   useEffect(() => {
-    const checkResponsive = () => {
-      const width = window.innerWidth;
-      setIsMobile(width <= 768);
-      setIsTablet(width > 768 && width <= 1024);
-      setOrientation(window.innerHeight > window.innerWidth ? 'portrait' : 'landscape');
+    const handleResize = () => {
+      isMobile.current = window.innerWidth <= 767;
     };
-    
-    checkResponsive();
-    window.addEventListener('resize', checkResponsive);
-    window.addEventListener('orientationchange', checkResponsive);
-    
-    return () => {
-      window.removeEventListener('resize', checkResponsive);
-      window.removeEventListener('orientationchange', checkResponsive);
-    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  // --- Auto-hide Controls on Mobile ---
-  const handleUserInteraction = useCallback(() => {
-    if (!isMobile) return;
-    
-    setShowControls(true);
-    
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    
-    controlsTimeoutRef.current = setTimeout(() => {
-      setShowControls(false);
-    }, 3000);
-  }, [isMobile]);
-
-  useEffect(() => {
-    if (isMobile) {
-      window.addEventListener('touchstart', handleUserInteraction);
-      window.addEventListener('mousemove', handleUserInteraction);
-      
-      return () => {
-        window.removeEventListener('touchstart', handleUserInteraction);
-        window.removeEventListener('mousemove', handleUserInteraction);
-        if (controlsTimeoutRef.current) {
-          clearTimeout(controlsTimeoutRef.current);
-        }
-      };
-    }
-  }, [isMobile, handleUserInteraction]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -137,7 +88,6 @@ export default function MeetingRoom() {
       myId.current = Math.random().toString(36).substring(2, 10);
       sessionStorage.setItem(sessionKey, myId.current);
     }
-    console.log("My client ID:", myId.current);
   }, [roomId]);
 
   useEffect(() => {
@@ -586,7 +536,6 @@ export default function MeetingRoom() {
     setPinnedParticipantId(null);
     setIsInWaitingRoom(false);
     setUnreadChatCount(0);
-    setConnectionStatus("disconnected");
 
     if (shouldRedirect) {
       if (isHostUser) {
@@ -616,7 +565,7 @@ export default function MeetingRoom() {
   // --- Peer Connection ---
   const shouldInitiateConnection = useCallback((remoteId) => {
     if (!myId.current || !remoteId) return false;
-    return myId.current < remoteId;
+    return myId.current.localeCompare(remoteId) < 0;
   }, []);
 
   const createPeerConnection = useCallback((remoteId, remoteName, audioEnabled, videoEnabled) => {
@@ -624,30 +573,28 @@ export default function MeetingRoom() {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun2.l.google.com:19302" },
-        { urls: "stun:stun3.l.google.com:19302" },
-        { urls: "stun:stun4.l.google.com:19302" },
       ],
-      iceCandidatePoolSize: 10,
     });
-    
     pcsRef.current[remoteId] = pc;
-    pendingCandidatesRef.current[remoteId] = [];
 
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        pc.addTrack(track, localStreamRef.current);
-      });
+      localStreamRef.current.getTracks().forEach((track) => pc.addTrack(track, localStreamRef.current));
     }
 
     pc.ontrack = (e) => {
       const stream = e.streams[0];
+      const nextAudioEnabled = typeof audioEnabled === "boolean"
+        ? audioEnabled
+        : (stream.getAudioTracks()[0]?.enabled ?? true);
+      const nextVideoEnabled = typeof videoEnabled === "boolean"
+        ? videoEnabled
+        : (stream.getVideoTracks()[0]?.enabled ?? true);
       setParticipants((prev) => {
         const exists = prev.find((p) => p.id === remoteId);
         if (exists) {
           return prev.map((p) => (
             p.id === remoteId
-              ? { ...p, stream, audioEnabled: true, videoEnabled: true }
+              ? { ...p, stream, audioEnabled: nextAudioEnabled, videoEnabled: nextVideoEnabled }
               : p
           ));
         } else {
@@ -657,8 +604,8 @@ export default function MeetingRoom() {
               id: remoteId,
               name: remoteName,
               stream,
-              audioEnabled: true,
-              videoEnabled: true,
+              audioEnabled: nextAudioEnabled,
+              videoEnabled: nextVideoEnabled,
             },
           ];
         }
@@ -668,21 +615,7 @@ export default function MeetingRoom() {
 
     pc.onicecandidate = (e) => {
       if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ 
-          type: "candidate", 
-          candidate: e.candidate, 
-          from: myId.current, 
-          to: remoteId 
-        }));
-      }
-    };
-
-    pc.oniceconnectionstatechange = () => {
-      const state = pc.iceConnectionState;
-      if (state === "connected") {
-        setConnectionStatus("connected");
-      } else if (state === "failed") {
-        console.error("ICE connection failed for:", remoteName);
+        wsRef.current.send(JSON.stringify({ type: "candidate", candidate: e.candidate, from: myId.current, to: remoteId }));
       }
     };
 
@@ -691,7 +624,7 @@ export default function MeetingRoom() {
 
   // --- WebSocket ---
   const connectWebSocket = useCallback((room, participantName, hostMode, sessionId = "") => {
-    const WS_SERVER = import.meta.env.VITE_WS_URL || "ws://localhost:8080";
+    const WS_SERVER = import.meta.env.VITE_WS_URL;
     const wsUrl = `${WS_SERVER}/ws/${room}`;
 
     if (wsRef.current) {
@@ -703,7 +636,6 @@ export default function MeetingRoom() {
     wsRef.current = socket;
 
     socket.onopen = () => {
-      setConnectionStatus("connected");
       const joinType = hostMode ? "host-join" : "waiting-room-request";
       socket.send(
         JSON.stringify({
@@ -741,10 +673,10 @@ export default function MeetingRoom() {
             }
             return [...prev, { client_id: msg.client_id, name: msg.name || "Guest" }];
           });
-          break;
+          return;
 
         case "user-joined":
-          if (msg.id === myId.current) break;
+          if (msg.id === myId.current) return;
           setParticipants((prev) => {
             const existing = prev.find((p) => p.id === msg.id);
             if (existing) {
@@ -759,6 +691,7 @@ export default function MeetingRoom() {
                   : p
               ));
             }
+
             return [
               ...prev,
               {
@@ -773,31 +706,22 @@ export default function MeetingRoom() {
 
           if (!pcsRef.current[msg.id] && shouldInitiateConnection(msg.id)) {
             const peer = createPeerConnection(msg.id, msg.name, true, true);
-            try {
-              const offer = await peer.createOffer();
-              await peer.setLocalDescription(offer);
-              wsRef.current?.send(JSON.stringify({ 
-                ...peer.localDescription.toJSON(), 
-                from: myId.current, 
-                to: msg.id, 
-                name: participantName 
-              }));
-            } catch (error) {
-              console.error("Error creating offer:", error);
-            }
+            const offer = await peer.createOffer();
+            await peer.setLocalDescription(offer);
+            wsRef.current?.send(JSON.stringify({ ...peer.localDescription.toJSON(), from: myId.current, to: msg.id, name: participantName }));
           }
-          break;
+          return;
 
         case "waiting":
           setIsInWaitingRoom(true);
           setWaitMessage(msg.message || "Waiting for host approval...");
-          break;
+          return;
 
         case "approved":
           setIsInWaitingRoom(false);
           setRoomVisible(true);
           setWaitMessage("");
-          break;
+          return;
 
         case "denied":
           alert(msg.message || "Your entry was denied by the host.");
@@ -805,7 +729,7 @@ export default function MeetingRoom() {
           setSetupVisible(true);
           setRoomVisible(false);
           setWaitMessage("");
-          break;
+          return;
 
         case "update-state":
           setParticipants((prev) =>
@@ -815,79 +739,42 @@ export default function MeetingRoom() {
                 : p
             )
           );
-          break;
+          return;
 
         case "join": {
-          try {
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            socket.send(JSON.stringify({ 
-              ...pc.localDescription.toJSON(), 
-              from: myId.current, 
-              to: msg.from, 
-              name: participantName 
-            }));
-          } catch (error) {
-            console.error("Error handling join:", error);
-          }
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: participantName }));
           break;
         }
-        
         case "offer": {
-          try {
-            await pc.setRemoteDescription(new RTCSessionDescription(msg));
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            socket.send(JSON.stringify({ 
-              ...pc.localDescription.toJSON(), 
-              from: myId.current, 
-              to: msg.from, 
-              name: participantName 
-            }));
-          } catch (error) {
-            console.error("Error handling offer:", error);
-          }
+          await pc.setRemoteDescription(new RTCSessionDescription(msg));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: participantName }));
           break;
         }
-        
         case "answer":
           await pc.setRemoteDescription(new RTCSessionDescription(msg));
           break;
-          
         case "candidate":
-          if (pc) {
-            if (pc.remoteDescription) {
-              await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
-            } else {
-              pendingCandidatesRef.current[msg.from]?.push(msg.candidate);
-            }
-          }
+          if (pc) await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
           break;
-          
         case "chat-message":
-          setMessages((prev) => [...prev, { 
-            from: msg.name, 
-            text: msg.message, 
-            time: new Date().toLocaleTimeString(), 
-            own: false 
-          }]);
+          setMessages((prev) => [...prev, { from: msg.name, text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
           setUnreadChatCount((count) => (chatOpen ? count : count + 1));
           break;
-          
         case "waiting-user-left":
           setWaitingUsers((prev) => prev.filter((user) => user.client_id !== msg.client_id));
           break;
-          
         case "removed":
           alert(msg.message || "You were removed from the meeting.");
           leaveMeeting();
-          break;
-          
+          return;
         case "host-left":
           alert(msg.message || "The host has left the meeting.");
           leaveMeeting();
-          break;
-          
+          return;
         case "user-left":
           if (pcsRef.current[msg.id]) {
             pcsRef.current[msg.id].close();
@@ -900,7 +787,6 @@ export default function MeetingRoom() {
     };
 
     socket.onclose = () => {
-      setConnectionStatus("disconnected");
       if (captionsEnabled) setCaptionsEnabled(false);
       if (isRecording) setIsRecording(false);
 
@@ -913,11 +799,6 @@ export default function MeetingRoom() {
           reconnectFnRef.current(room, participantName, hostMode, sessionId);
         }
       }, 5000);
-    };
-
-    socket.onerror = (error) => {
-      console.error("WebSocket error:", error);
-      setConnectionStatus("error");
     };
   }, [captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting]);
 
@@ -935,52 +816,27 @@ export default function MeetingRoom() {
       return cachedSessionId;
     }
 
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/guest/session`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          room_id: roomId,
-          name: displayName,
-        }),
-      });
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/guest/session`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        room_id: roomId,
+        name: displayName,
+      }),
+    });
 
-      if (!response.ok) {
-        throw new Error("Unable to create guest session");
-      }
-
-      const data = await response.json();
-      const sessionId = data.session_id || "";
-      sessionStorage.setItem(storageKey, sessionId);
-      setGuestSessionId(sessionId);
-      return sessionId;
-    } catch (error) {
-      console.error("Guest session error:", error);
-      return "";
+    if (!response.ok) {
+      throw new Error("Unable to create guest session");
     }
+
+    const data = await response.json();
+    const sessionId = data.session_id || "";
+    sessionStorage.setItem(storageKey, sessionId);
+    setGuestSessionId(sessionId);
+    return sessionId;
   }, [roomId]);
-
-  // --- Optimized Grid Layout ---
-  const getOptimalGridColumns = useCallback(() => {
-    const participantCount = participants.length;
-    
-    if (isMobile) {
-      return 1;
-    }
-    
-    if (isTablet) {
-      if (participantCount === 1) return 1;
-      if (participantCount <= 2) return 2;
-      return 2;
-    }
-    
-    // Desktop - max 3 columns for better visibility
-    if (participantCount === 1) return 1;
-    if (participantCount === 2) return 2;
-    return Math.min(participantCount, 3);
-  }, [isMobile, isTablet, participants.length]);
 
   // --- Join Call ---
   const joinCall = useCallback(async (room = roomId || "default-room", name) => {
@@ -998,6 +854,7 @@ export default function MeetingRoom() {
     if (hostMode) {
       setRoomVisible(true);
       setIsInWaitingRoom(false);
+      console.log("Host auto join, using profile identity:", resolvedName);
     } else {
       setRoomVisible(false);
       setIsInWaitingRoom(true);
@@ -1015,10 +872,7 @@ export default function MeetingRoom() {
         sessionId = await ensureGuestSession(resolvedName);
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } }, 
-        audio: { echoCancellation: true, noiseSuppression: true } 
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       cameraStreamRef.current = stream;
 
       const savedMic = sessionStorage.getItem("micMuted") === "true";
@@ -1032,7 +886,7 @@ export default function MeetingRoom() {
     } catch (e) {
       hasJoinedRef.current = false;
       console.error("Media error", e);
-      alert("Could not access camera and microphone. Please check permissions.");
+      alert("Could not access camera and microphone.");
       return;
     }
 
@@ -1057,11 +911,8 @@ export default function MeetingRoom() {
     if (!roomId || !meetingReady || !hostAccessResolved) return;
     if (hasJoinedRef.current) return;
 
-    const rememberedGuestSession = sessionStorage.getItem(`meeting-guest-session:${roomId}`);
-    const rememberedGuestName = sessionStorage.getItem(`meeting-guest-name:${roomId}`);
-    const rememberedName = rememberedGuestName || sessionStorage.getItem("name") || myName || "Guest";
-
-    if (!rememberedGuestSession && !rememberedGuestName) return;
+    const rememberedName = sessionStorage.getItem(`meeting-guest-name:${roomId}`) || myName;
+    if (!rememberedName || rememberedName === "Guest") return;
 
     const timer = setTimeout(() => {
       joinCall(roomId, rememberedName);
@@ -1203,41 +1054,6 @@ export default function MeetingRoom() {
     }
   }, [recordedBlobUrl]);
 
-  // --- Render Functions ---
-  const renderVideoGrid = useCallback(() => {
-    const filteredParticipants = participants.filter(p => !pinnedParticipantId || p.id === pinnedParticipantId);
-    const columns = getOptimalGridColumns();
-    
-    return (
-      <div 
-        id="videos" 
-        className={`participant-grid participants-${Math.min(filteredParticipants.length, 9)}`}
-        style={{
-          gridTemplateColumns: isMobile ? '1fr' : `repeat(${columns}, minmax(300px, 1fr))`
-        }}
-      >
-        {filteredParticipants.map((p) => (
-          <VideoTile
-            key={p.id}
-            id={p.id}
-            name={p.name}
-            isLocal={p.isLocal}
-            stream={p.stream}
-            audioEnabled={p.audioEnabled}
-            videoEnabled={p.videoEnabled}
-            captions={captions[p.id]}
-            isPinned={p.id === pinnedParticipantId}
-            isFeatured={p.id === pinnedParticipantId}
-            isMirrored={p.isLocal ? isMirrored : false}
-            onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
-            isMobile={isMobile}
-            connectionState={connectionStatus}
-          />
-        ))}
-      </div>
-    );
-  }, [participants, pinnedParticipantId, captions, isMirrored, isMobile, getOptimalGridColumns, connectionStatus]);
-
   // --- Render ---
   if ((isLoggedIn && !profileReady) || !meetingReady || !hostAccessResolved) {
     return (
@@ -1301,51 +1117,18 @@ export default function MeetingRoom() {
           <div className="meeting-state-icon">
             <FaHourglassHalf />
           </div>
-          <h2>Waiting for host approval</h2>
-          <p>{waitMessage || "Please wait while the host approves your entry."}</p>
-        </div>
+        <h2>Waiting for host approval</h2>
+        <p>{waitMessage || "Please wait while the host approves your entry."}</p>
+      </div>
       </div>
     );
   }
 
   if (roomVisible) {
     return (
-      <div 
-        id="room" 
-        className="meeting-room-shell"
-        onTouchStart={handleUserInteraction}
-        onMouseMove={handleUserInteraction}
-      >
-        {/* Connection Status Indicator */}
-        <div style={{
-          position: 'fixed',
-          top: '10px',
-          right: '10px',
-          zIndex: 100,
-          padding: '4px 8px',
-          borderRadius: '8px',
-          background: connectionStatus === 'connected' ? 'rgba(34, 197, 94, 0.9)' : 
-                      connectionStatus === 'connecting' ? 'rgba(251, 191, 36, 0.9)' : 
-                      'rgba(239, 68, 68, 0.9)',
-          color: 'white',
-          fontSize: '12px',
-          fontWeight: 'bold'
-        }}>
-          {connectionStatus === 'connected' ? '● Connected' : 
-           connectionStatus === 'connecting' ? '◐ Connecting' : 
-           '○ Disconnected'}
-        </div>
-
+      <div id="room" className="meeting-room-shell">
         {/* Header */}
-        <div 
-          className="room-header" 
-          style={{
-            transform: (showControls || !isMobile) ? 'translateY(0)' : 'translateY(-100%)',
-            opacity: (showControls || !isMobile) ? 1 : 0,
-            transition: 'all 0.3s ease',
-            pointerEvents: (showControls || !isMobile) ? 'auto' : 'none'
-          }}
-        >
+        <div className="room-header">
           <div className="room-info">
             <div className="room-pill room-name">
               <FaDoorOpen />
@@ -1367,9 +1150,6 @@ export default function MeetingRoom() {
                 <span>Recording {recordingTimer}</span>
               </div>
             )}
-            <div className={`room-pill ${connectionStatus === 'connected' ? 'connected' : 'disconnected'}`}>
-              {connectionStatus === 'connected' ? '🔗 Connected' : '🔌 Disconnected'}
-            </div>
           </div>
         </div>
 
@@ -1397,68 +1177,79 @@ export default function MeetingRoom() {
 
         {/* Main Content */}
         <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
-          {renderVideoGrid()}
-          
-          {pinnedParticipantId && (
-            <div id="pinned-column">
-              {participants
-                .filter((p) => pinnedParticipantId && p.id !== pinnedParticipantId)
-                .slice(0, isMobile ? 2 : 4)
-                .map((p) => (
-                  <VideoTile
-                    key={p.id}
-                    id={p.id}
-                    name={p.name}
-                    isLocal={p.isLocal}
-                    stream={p.stream}
-                    audioEnabled={p.audioEnabled}
-                    videoEnabled={p.videoEnabled}
-                    captions={captions[p.id]}
-                    isPinned={false}
-                    isMirrored={p.isLocal ? isMirrored : false}
-                    onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
-                    isMobile={isMobile}
-                  />
-                ))}
-            </div>
-          )}
+          <div id="videos" className={`participant-grid participants-${Math.min(participants.length || 1, 6)}`}>
+            {participants
+              .filter((p) => !pinnedParticipantId || p.id === pinnedParticipantId)
+              .map((p) => (
+                <VideoTile
+                  key={p.id}
+                  {...p}
+                  captions={captions[p.id]}
+                  isPinned={p.id === pinnedParticipantId}
+                  isFeatured={p.id === pinnedParticipantId}
+                  isMirrored={p.isLocal ? isMirrored : false}
+                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                />
+              ))}
+          </div>
+          <div id="pinned-column">
+            {participants
+              .filter((p) => pinnedParticipantId && p.id !== pinnedParticipantId)
+              .map((p) => (
+                <VideoTile
+                  key={p.id}
+                  {...p}
+                  captions={captions[p.id]}
+                  isPinned={false}
+                  isMirrored={p.isLocal ? isMirrored : false}
+                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                />
+              ))}
+          </div>
+        </div>
+
+        {/* Participants strip for screen share */}
+        <div id="participants-strip">
+          {isScreenSharing &&
+            participants
+              .filter((p) => !p.isLocal)
+              .map((p) => (
+                <VideoTile
+                  key={p.id}
+                  {...p}
+                  captions={captions[p.id]}
+                  isMirrored={p.isLocal ? isMirrored : false}
+                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                />
+              ))}
         </div>
 
         {/* Controls */}
-        <div 
-          className="controls-dock"
-          style={{
-            transform: (showControls || !isMobile) ? 'translateY(0)' : 'translateY(100%)',
-            transition: 'transform 0.3s ease'
+        <ControlsBar
+          isMicOn={localParticipant?.audioEnabled ?? true}
+          isCameraOn={localParticipant?.videoEnabled ?? true}
+          isSharingScreen={isScreenSharing}
+          isRecording={isRecording}
+          captionsEnabled={captionsEnabled}
+          chatOpen={chatOpen}
+          unreadChatCount={unreadChatCount}
+          onToggleMic={() => toggleMic()}
+          onToggleCamera={() => toggleCamera()}
+          onShareScreen={() => toggleScreenShare()}
+          onRecord={() => {
+            if (isRecording) {
+              stopRecording();
+              return;
+            }
+            setRecordingModalMode("start");
+            setRecordingModalOpen(true);
           }}
-        >
-          <ControlsBar
-            isMicOn={localParticipant?.audioEnabled ?? true}
-            isCameraOn={localParticipant?.videoEnabled ?? true}
-            isSharingScreen={isScreenSharing}
-            isRecording={isRecording}
-            captionsEnabled={captionsEnabled}
-            chatOpen={chatOpen}
-            unreadChatCount={unreadChatCount}
-            onToggleMic={() => toggleMic()}
-            onToggleCamera={() => toggleCamera()}
-            onShareScreen={() => toggleScreenShare()}
-            onRecord={() => {
-              if (isRecording) {
-                stopRecording();
-                return;
-              }
-              setRecordingModalMode("start");
-              setRecordingModalOpen(true);
-            }}
-            onCaptions={() => setCaptionsEnabled(!captionsEnabled)}
-            onChat={() => setChatOpen(!chatOpen)}
-            onLeave={() => leaveMeeting()}
-            isMobile={isMobile}
-          />
-        </div>
+          onCaptions={() => setCaptionsEnabled(!captionsEnabled)}
+          onChat={() => setChatOpen(!chatOpen)}
+          onLeave={() => leaveMeeting()}
+        />
 
-        {isRecording && (
+        {/* {isRecording && (
           <div className="recording-status-banner">
             <div className="recording-status-title">Recording in progress...</div>
             <div className="recording-status-subtext">
@@ -1468,7 +1259,7 @@ export default function MeetingRoom() {
               Stop Recording
             </button>
           </div>
-        )}
+        )} */}
 
         {/* Chat Sidebar */}
         <ChatSidebar
@@ -1478,7 +1269,6 @@ export default function MeetingRoom() {
           msgInput={msgInput}
           setMsgInput={setMsgInput}
           sendMessage={() => sendChatMessage(msgInput)}
-          isMobile={isMobile}
         />
 
         {/* Recording Modal */}
