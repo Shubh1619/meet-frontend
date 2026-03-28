@@ -52,6 +52,13 @@ export default function MeetingRoom() {
   const [captions, setCaptions] = useState({});
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
 
+  // --- Responsive State ---
+  const [isMobile, setIsMobile] = useState(false);
+  const [isTablet, setIsTablet] = useState(false);
+  const [orientation, setOrientation] = useState('portrait');
+  const [showControls, setShowControls] = useState(true);
+  const controlsTimeoutRef = useRef(null);
+
   // --- Media/WebRTC ---
   const localStreamRef = useRef(null);
   const cameraStreamRef = useRef(null);
@@ -66,6 +73,55 @@ export default function MeetingRoom() {
   const recordingStreamRef = useRef(null);
   const recordingChunksRef = useRef([]);
   const recordingStartedAtRef = useRef(null);
+
+  // --- Responsive Detection ---
+  useEffect(() => {
+    const checkResponsive = () => {
+      const width = window.innerWidth;
+      setIsMobile(width <= 768);
+      setIsTablet(width > 768 && width <= 1024);
+      setOrientation(window.innerHeight > window.innerWidth ? 'portrait' : 'landscape');
+    };
+    
+    checkResponsive();
+    window.addEventListener('resize', checkResponsive);
+    window.addEventListener('orientationchange', checkResponsive);
+    
+    return () => {
+      window.removeEventListener('resize', checkResponsive);
+      window.removeEventListener('orientationchange', checkResponsive);
+    };
+  }, []);
+
+  // --- Auto-hide Controls on Mobile ---
+  const handleUserInteraction = useCallback(() => {
+    if (!isMobile) return;
+    
+    setShowControls(true);
+    
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+  }, [isMobile]);
+
+  useEffect(() => {
+    if (isMobile) {
+      window.addEventListener('touchstart', handleUserInteraction);
+      window.addEventListener('mousemove', handleUserInteraction);
+      
+      return () => {
+        window.removeEventListener('touchstart', handleUserInteraction);
+        window.removeEventListener('mousemove', handleUserInteraction);
+        if (controlsTimeoutRef.current) {
+          clearTimeout(controlsTimeoutRef.current);
+        }
+      };
+    }
+  }, [isMobile, handleUserInteraction]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -178,8 +234,6 @@ export default function MeetingRoom() {
   useEffect(() => {
     if (!meetingReady) return;
 
-    // If a host session is already present for this room (e.g. instant meeting creator),
-    // do not downgrade to guest mode.
     if (hostSessionId) {
       setIsHostUser(true);
       setHostAccessResolved(true);
@@ -413,6 +467,7 @@ export default function MeetingRoom() {
       screenStreamRef.current = null;
     }
   }, [isScreenSharing, myName, setLocalStreamHandler]);
+
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
@@ -481,6 +536,7 @@ export default function MeetingRoom() {
     setIsRecording(false);
     setRecordingTimer("00:00");
   }, []);
+
   const leaveMeeting = useCallback((shouldRedirect = true) => {
     hasJoinedRef.current = false;
 
@@ -536,6 +592,7 @@ export default function MeetingRoom() {
       }
     }
   }, [isHostUser, navigate]);
+
   const sendChatMessage = (message) => {
     const trimmedMessage = message.trim();
     if (!trimmedMessage) return;
@@ -828,6 +885,29 @@ export default function MeetingRoom() {
     return sessionId;
   }, [roomId]);
 
+  // --- Optimized Grid Layout ---
+  const getOptimalGridColumns = useCallback(() => {
+    const participantCount = participants.length;
+    
+    if (isMobile) {
+      return 1;
+    }
+    
+    if (isTablet) {
+      if (participantCount === 1) return 1;
+      if (participantCount <= 2) return 2;
+      if (participantCount <= 4) return 2;
+      return 3;
+    }
+    
+    // Desktop layout
+    if (participantCount === 1) return 1;
+    if (participantCount === 2) return 2;
+    if (participantCount <= 4) return 2;
+    if (participantCount <= 6) return 3;
+    return 4;
+  }, [isMobile, isTablet, participants.length]);
+
   // --- Join Call ---
   const joinCall = useCallback(async (room = roomId || "default-room", name) => {
     if (hasJoinedRef.current) return;
@@ -905,7 +985,6 @@ export default function MeetingRoom() {
     const rememberedGuestName = sessionStorage.getItem(`meeting-guest-name:${roomId}`);
     const rememberedName = rememberedGuestName || sessionStorage.getItem("name") || myName || "Guest";
 
-    // Only auto-rejoin if this browser already joined this room before.
     if (!rememberedGuestSession && !rememberedGuestName) return;
 
     const timer = setTimeout(() => {
@@ -1048,6 +1127,36 @@ export default function MeetingRoom() {
     }
   }, [recordedBlobUrl]);
 
+  // --- Render Functions ---
+  const renderVideoGrid = useCallback(() => {
+    const filteredParticipants = participants.filter(p => !pinnedParticipantId || p.id === pinnedParticipantId);
+    const columns = getOptimalGridColumns();
+    const participantCount = filteredParticipants.length;
+    
+    return (
+      <div 
+        id="videos" 
+        className={`participant-grid participants-${Math.min(participantCount, 9)}`}
+        style={{
+          gridTemplateColumns: isMobile ? '1fr' : `repeat(${columns}, minmax(280px, 1fr))`
+        }}
+      >
+        {filteredParticipants.map((p) => (
+          <VideoTile
+            key={p.id}
+            {...p}
+            captions={captions[p.id]}
+            isPinned={p.id === pinnedParticipantId}
+            isFeatured={p.id === pinnedParticipantId}
+            isMirrored={p.isLocal ? isMirrored : false}
+            onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+            isMobile={isMobile}
+          />
+        ))}
+      </div>
+    );
+  }, [participants, pinnedParticipantId, captions, isMirrored, isMobile, getOptimalGridColumns]);
+
   // --- Render ---
   if ((isLoggedIn && !profileReady) || !meetingReady || !hostAccessResolved) {
     return (
@@ -1079,11 +1188,6 @@ export default function MeetingRoom() {
             <h2>Join Meeting</h2>
             <p className="setup-subtitle">Enter your name to request access from the host.</p>
           </div>
-          {/* <div className="security-badge">
-            <span>Secured connection</span>
-            <span className="security-separator">|</span>
-            <span>Waiting room enabled</span>
-          </div> */}
           <input
             type="text"
             id="nameInput"
@@ -1116,18 +1220,31 @@ export default function MeetingRoom() {
           <div className="meeting-state-icon">
             <FaHourglassHalf />
           </div>
-        <h2>Waiting for host approval</h2>
-        <p>{waitMessage || "Please wait while the host approves your entry."}</p>
-      </div>
+          <h2>Waiting for host approval</h2>
+          <p>{waitMessage || "Please wait while the host approves your entry."}</p>
+        </div>
       </div>
     );
   }
 
   if (roomVisible) {
     return (
-      <div id="room" className="meeting-room-shell">
-        {/* Header */}
-        <div className="room-header">
+      <div 
+        id="room" 
+        className="meeting-room-shell"
+        onTouchStart={handleUserInteraction}
+        onMouseMove={handleUserInteraction}
+      >
+        {/* Header with auto-hide on mobile */}
+        <div 
+          className="room-header" 
+          style={{
+            transform: (showControls || !isMobile) ? 'translateY(0)' : 'translateY(-100%)',
+            opacity: (showControls || !isMobile) ? 1 : 0,
+            transition: 'all 0.3s ease',
+            pointerEvents: (showControls || !isMobile) ? 'auto' : 'none'
+          }}
+        >
           <div className="room-info">
             <div className="room-pill room-name">
               <FaDoorOpen />
@@ -1150,10 +1267,6 @@ export default function MeetingRoom() {
               </div>
             )}
           </div>
-          {/* <div className="security-indicator room-pill">
-            <FaLock />
-            <span>Secured Connection</span>
-          </div> */}
         </div>
 
         {/* Waiting room requests (host only) */}
@@ -1180,35 +1293,26 @@ export default function MeetingRoom() {
 
         {/* Main Content */}
         <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
-          <div id="videos" className={`participant-grid participants-${Math.min(participants.length || 1, 6)}`}>
-            {participants
-              .filter((p) => !pinnedParticipantId || p.id === pinnedParticipantId)
-              .map((p) => (
-                <VideoTile
-                  key={p.id}
-                  {...p}
-                  captions={captions[p.id]}
-                  isPinned={p.id === pinnedParticipantId}
-                  isFeatured={p.id === pinnedParticipantId}
-                  isMirrored={p.isLocal ? isMirrored : false}
-                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
-                />
-              ))}
-          </div>
-          <div id="pinned-column">
-            {participants
-              .filter((p) => pinnedParticipantId && p.id !== pinnedParticipantId)
-              .map((p) => (
-                <VideoTile
-                  key={p.id}
-                  {...p}
-                  captions={captions[p.id]}
-                  isPinned={false}
-                  isMirrored={p.isLocal ? isMirrored : false}
-                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
-                />
-              ))}
-          </div>
+          {renderVideoGrid()}
+          
+          {pinnedParticipantId && (
+            <div id="pinned-column">
+              {participants
+                .filter((p) => pinnedParticipantId && p.id !== pinnedParticipantId)
+                .slice(0, isMobile ? 2 : 4)
+                .map((p) => (
+                  <VideoTile
+                    key={p.id}
+                    {...p}
+                    captions={captions[p.id]}
+                    isPinned={false}
+                    isMirrored={p.isLocal ? isMirrored : false}
+                    onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                    isMobile={isMobile}
+                  />
+                ))}
+            </div>
+          )}
         </div>
 
         {/* Participants strip for screen share */}
@@ -1223,34 +1327,44 @@ export default function MeetingRoom() {
                   captions={captions[p.id]}
                   isMirrored={p.isLocal ? isMirrored : false}
                   onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                  isMobile={isMobile}
                 />
               ))}
         </div>
 
-        {/* Controls */}
-        <ControlsBar
-          isMicOn={localParticipant?.audioEnabled ?? true}
-          isCameraOn={localParticipant?.videoEnabled ?? true}
-          isSharingScreen={isScreenSharing}
-          isRecording={isRecording}
-          captionsEnabled={captionsEnabled}
-          chatOpen={chatOpen}
-          unreadChatCount={unreadChatCount}
-          onToggleMic={() => toggleMic()}
-          onToggleCamera={() => toggleCamera()}
-          onShareScreen={() => toggleScreenShare()}
-          onRecord={() => {
-            if (isRecording) {
-              stopRecording();
-              return;
-            }
-            setRecordingModalMode("start");
-            setRecordingModalOpen(true);
+        {/* Controls with auto-hide on mobile */}
+        <div 
+          className="controls-dock"
+          style={{
+            transform: (showControls || !isMobile) ? 'translateY(0)' : 'translateY(100%)',
+            transition: 'transform 0.3s ease'
           }}
-          onCaptions={() => setCaptionsEnabled(!captionsEnabled)}
-          onChat={() => setChatOpen(!chatOpen)}
-          onLeave={() => leaveMeeting()}
-        />
+        >
+          <ControlsBar
+            isMicOn={localParticipant?.audioEnabled ?? true}
+            isCameraOn={localParticipant?.videoEnabled ?? true}
+            isSharingScreen={isScreenSharing}
+            isRecording={isRecording}
+            captionsEnabled={captionsEnabled}
+            chatOpen={chatOpen}
+            unreadChatCount={unreadChatCount}
+            onToggleMic={() => toggleMic()}
+            onToggleCamera={() => toggleCamera()}
+            onShareScreen={() => toggleScreenShare()}
+            onRecord={() => {
+              if (isRecording) {
+                stopRecording();
+                return;
+              }
+              setRecordingModalMode("start");
+              setRecordingModalOpen(true);
+            }}
+            onCaptions={() => setCaptionsEnabled(!captionsEnabled)}
+            onChat={() => setChatOpen(!chatOpen)}
+            onLeave={() => leaveMeeting()}
+            isMobile={isMobile}
+          />
+        </div>
 
         {isRecording && (
           <div className="recording-status-banner">
@@ -1272,6 +1386,7 @@ export default function MeetingRoom() {
           msgInput={msgInput}
           setMsgInput={setMsgInput}
           sendMessage={() => sendChatMessage(msgInput)}
+          isMobile={isMobile}
         />
 
         {/* Recording Modal */}
