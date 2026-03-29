@@ -11,12 +11,24 @@ const VideoTile = ({
   isPinned,
   connectionState,
   onTogglePin,
-  isMirrored = false
+  isMirrored = false,
+  captions
 }) => {
   const videoRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const timeoutRef = useRef(null);
+  
+  // Check mobile on mount and resize
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 767);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   // Attach stream to video element
   useEffect(() => {
@@ -52,17 +64,19 @@ const VideoTile = ({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
   
-  // Auto-hide controls
+  // Auto-hide controls on desktop only
   const handleMouseEnter = () => {
+    if (isMobile) return;
     setShowControls(true);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
   };
   
   const handleMouseLeave = () => {
+    if (isMobile) return;
     timeoutRef.current = setTimeout(() => setShowControls(false), 2000);
   };
   
-  // Connection state indicator
+  // Connection state indicator color
   const getConnectionStateColor = () => {
     switch (connectionState) {
       case 'connected': return '#10b981';
@@ -74,9 +88,11 @@ const VideoTile = ({
   
   return (
     <div
-      className={`video-tile ${isPinned ? 'pinned' : ''}`}
+      className={`video-tile ${isPinned ? 'is-pinned' : ''} ${isFullscreen ? 'fullscreen' : ''}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={() => isMobile && setShowControls(true)}
+      onTouchEnd={() => isMobile && setTimeout(() => setShowControls(false), 3000)}
     >
       {/* Connection indicator */}
       {connectionState && !isLocal && (
@@ -90,7 +106,8 @@ const VideoTile = ({
             height: '8px',
             borderRadius: '50%',
             backgroundColor: getConnectionStateColor(),
-            zIndex: 2
+            zIndex: 2,
+            boxShadow: '0 0 0 2px rgba(0,0,0,0.3)'
           }}
         />
       )}
@@ -99,7 +116,11 @@ const VideoTile = ({
       <button
         className="video-tile-pin"
         onClick={onTogglePin}
-        style={{ opacity: showControls ? 1 : 0.6 }}
+        style={{ 
+          opacity: (showControls || isMobile) ? 1 : 0.6,
+          transform: isPinned ? 'rotate(45deg)' : 'none'
+        }}
+        aria-label={isPinned ? "Unpin video" : "Pin video"}
       >
         <FaThumbtack />
       </button>
@@ -111,21 +132,28 @@ const VideoTile = ({
           autoPlay
           playsInline
           muted={isLocal}
-          className={`video-tile-video ${isMirrored ? 'mirrored' : ''}`}
+          className={`video-tile-video ${isMirrored ? 'video-tile-video-mirrored' : ''}`}
           onDoubleClick={toggleFullscreen}
         />
         
         {!videoEnabled && (
           <div className="video-off-overlay">
-            <FaVideoSlash size={32} />
+            <FaVideoSlash size={isMobile ? 24 : 32} />
             <span>Camera off</span>
           </div>
         )}
       </div>
       
+      {/* Captions */}
+      {captions && (
+        <div className="video-tile-captions">
+          {captions}
+        </div>
+      )}
+      
       {/* Footer */}
       <div className="video-tile-footer">
-        <div className="video-tile-name">
+        <div className="video-tile-name" title={name}>
           {name} {isLocal && '(You)'}
         </div>
         <div className="video-tile-status">

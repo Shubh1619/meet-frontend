@@ -1,0 +1,358 @@
+/* Dashboard.css - Fully responsive */
+
+.dashboard-container {
+  min-height: calc(100vh - 60px);
+  padding: 5.75rem 1rem 2rem;
+  width: 100%;
+  transition: background 0.3s ease;
+}
+
+.dashboard-container.light {
+  background: #F8F9FF;
+}
+
+.dashboard-container.dark {
+  background: #1a1a2e;
+}
+
+/* Main grid layout */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+  }
+  
+  .dashboard-right {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .dashboard-container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  
+  .dashboard-grid {
+    gap: 2rem;
+  }
+}
+
+/* Card styling */
+.dashboard-card {
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+@media (min-width: 768px) {
+  .dashboard-card {
+    padding: 1.5rem;
+  }
+}
+
+@media (hover: hover) {
+  .dashboard-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.light .dashboard-card {
+  background: #fff;
+  color: #1E1E2F;
+}
+
+.dark .dashboard-card {
+  background: #16213e;
+  color: #e4e4e7;
+}
+
+/* Calendar card */
+.calendar-card h2 {
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .calendar-card h2 {
+    font-size: 1.5rem;
+  }
+}
+
+/* Meetings header */
+.meetings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+@media (min-width: 768px) {
+  .meetings-header {
+    font-size: 1rem;
+  }
+}
+
+.meeting-count {
+  opacity: 0.7;
+  font-size: 0.875rem;
+}
+
+/* Meetings list with scroll */
+.meetings-list {
+  margin-top: 1rem;
+  max-height: 300px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+@media (min-width: 1024px) {
+  .meetings-list {
+    max-height: 400px;
+  }
+}
+
+/* Custom scrollbar */
+.meetings-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.meetings-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+.meetings-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.dark .meetings-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dark .meetings-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  opacity: 0.6;
+  font-size: 0.875rem;
+}
+
+/* Notes section */
+.notes-section {
+  margin-top: 1.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid;
+}
+
+.light .notes-section {
+  border-color: #eee;
+}
+
+.dark .notes-section {
+  border-color: #333;
+}
+
+.notes-section h3 {
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+}
+
+@media (min-width: 768px) {
+  .notes-section h3 {
+    font-size: 1.125rem;
+    margin-bottom: 1rem;
+  }
+}
+
+.notes-textarea {
+  width: 100%;
+  height: 120px;
+  padding: 0.75rem;
+  border-radius: 12px;
+  resize: vertical;
+  font-family: inherit;
+  font-size: 16px;
+  transition: border-color 0.2s ease;
+}
+
+@media (min-width: 768px) {
+  .notes-textarea {
+    height: 150px;
+    padding: 1rem;
+    font-size: 1rem;
+  }
+}
+
+.light .notes-textarea {
+  border: 1px solid #ddd;
+  background: #fff;
+  color: #1E1E2F;
+}
+
+.dark .notes-textarea {
+  border: 1px solid #444;
+  background: #0f0f23;
+  color: #e4e4e7;
+}
+
+.notes-textarea:focus {
+  outline: none;
+  border-color: #6759FF;
+}
+
+/* Notes action buttons */
+.notes-actions {
+  margin-top: 0.8rem;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.6rem;
+}
+
+@media (min-width: 480px) {
+  .notes-actions {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.btn-save,
+.btn-delete {
+  padding: 0.75rem;
+  width: 100%;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  font-size: 0.875rem;
+  min-height: 44px;
+}
+
+@media (min-width: 768px) {
+  .btn-save,
+  .btn-delete {
+    padding: 0.85rem;
+    font-size: 1rem;
+    min-height: auto;
+  }
+}
+
+.btn-save {
+  background: linear-gradient(135deg, #6759FF, #A79BFF);
+  color: #fff;
+}
+
+@media (hover: hover) {
+  .btn-save:hover {
+    transform: translateY(-1px);
+    opacity: 0.95;
+  }
+}
+
+.btn-save:active {
+  transform: translateY(0);
+}
+
+.light .btn-delete {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+
+.dark .btn-delete {
+  background: #451a1a;
+  color: #fecaca;
+  border: 1px solid #7f1d1d;
+}
+
+@media (hover: hover) {
+  .btn-delete:hover {
+    transform: translateY(-1px);
+    opacity: 0.9;
+  }
+}
+
+/* Actions card */
+.actions-card strong {
+  display: block;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+
+@media (min-width: 768px) {
+  .actions-card strong {
+    font-size: 1rem;
+    margin-bottom: 1rem;
+  }
+}
+
+.actions-buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.actions-buttons button {
+  flex: 1;
+  min-width: 140px;
+}
+
+/* Touch optimization */
+@media (max-width: 768px) {
+  .actions-buttons button {
+    min-height: 44px;
+  }
+}
+
+/* Loading animation */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.dashboard-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.dashboard-loading::after {
+  content: '';
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #6759FF;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}

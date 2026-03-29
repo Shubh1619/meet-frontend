@@ -1150,7 +1150,7 @@ export default function MeetingRoom() {
                 alert("Please enter your name to continue.");
                 return;
               }
-              joinCall(roomId || "default-room", trimmedName); // ✅ ONLY HERE
+              joinCall(roomId || "default-room", trimmedName);
             }}
           >
             Request to Join
@@ -1298,18 +1298,6 @@ export default function MeetingRoom() {
           onChat={() => setChatOpen(!chatOpen)}
           onLeave={() => leaveMeeting()}
         />
-
-        {/* {isRecording && (
-          <div className="recording-status-banner">
-            <div className="recording-status-title">Recording in progress...</div>
-            <div className="recording-status-subtext">
-              Your screen is being recorded. Click Stop Recording when you are done.
-            </div>
-            <button type="button" className="recording-stop-button" onClick={stopRecording}>
-              Stop Recording
-            </button>
-          </div>
-        )} */}
 
         {/* Chat Sidebar */}
         <ChatSidebar
