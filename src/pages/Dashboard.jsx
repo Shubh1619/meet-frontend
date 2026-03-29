@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import CalendarView from "../components/CalendarView";
 import MeetingCard from "../components/MeetingCard";
 import ActionButton from "../components/ActionButton";
-import { apiGet, apiPost } from "../api";
+import { apiDelete, apiGet, apiPost } from "../api";
 import { useDarkMode } from "../context/DarkModeContext";
 
 export default function Dashboard() {
@@ -112,6 +112,25 @@ export default function Dashboard() {
     } catch (err) {
       console.error("Note save failed", err);
       alert("Error saving note");
+    }
+  }
+
+  async function deleteNoteForSelectedDate() {
+    const confirmed = window.confirm(`Delete notes for ${selectedDate}?`);
+    if (!confirmed) return;
+
+    try {
+      await apiDelete(`/notes/delete-by-date?date=${selectedDate}`);
+      setNoteText("");
+      alert("Notes deleted!");
+
+      const [year, month] = selectedDate.split("-");
+      const monthStr = `${year}-${month}`;
+      const monthNotes = await apiGet(`/notes/month?month=${monthStr}`);
+      setNoteDates(monthNotes.dates || []);
+    } catch (err) {
+      console.error("Note delete failed", err);
+      alert("Error deleting note");
     }
   }
 
@@ -228,22 +247,46 @@ export default function Dashboard() {
                 }}
               />
 
-              <button
-                onClick={saveNote}
+              <div
                 style={{
                   marginTop: "0.8rem",
-                  padding: "0.75rem",
-                  width: "100%",
-                  borderRadius: 12,
-                  background: "linear-gradient(135deg,#6759FF,#A79BFF)",
-                  color: "#fff",
-                  border: "none",
-                  fontWeight: 600,
-                  cursor: "pointer",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                  gap: "0.6rem",
                 }}
               >
-                💾 Save Notes
-              </button>
+                <button
+                  onClick={saveNote}
+                  style={{
+                    padding: "0.75rem",
+                    width: "100%",
+                    borderRadius: 12,
+                    background: "linear-gradient(135deg,#6759FF,#A79BFF)",
+                    color: "#fff",
+                    border: "none",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Save Notes
+                </button>
+
+                <button
+                  onClick={deleteNoteForSelectedDate}
+                  style={{
+                    padding: "0.75rem",
+                    width: "100%",
+                    borderRadius: 12,
+                    background: darkMode ? "#451a1a" : "#fee2e2",
+                    color: darkMode ? "#fecaca" : "#b91c1c",
+                    border: `1px solid ${darkMode ? "#7f1d1d" : "#fca5a5"}`,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  Delete Notes
+                </button>
+              </div>
             </div>
           </div>
 
