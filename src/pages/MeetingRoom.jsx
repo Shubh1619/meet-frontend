@@ -278,12 +278,12 @@ export default function MeetingRoom() {
         return prev.map((p) => (
           p.id === "you"
             ? {
-                ...p,
-                name: displayName,
-                stream,
-                audioEnabled: stream.getAudioTracks()[0]?.enabled ?? true,
-                videoEnabled: stream.getVideoTracks()[0]?.enabled ?? true,
-              }
+              ...p,
+              name: displayName,
+              stream,
+              audioEnabled: stream.getAudioTracks()[0]?.enabled ?? true,
+              videoEnabled: stream.getVideoTracks()[0]?.enabled ?? true,
+            }
             : p
         ));
       } else {
@@ -569,12 +569,21 @@ export default function MeetingRoom() {
   }, []);
 
   const createPeerConnection = useCallback((remoteId, remoteName, audioEnabled, videoEnabled) => {
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-      ],
-    });
+const pc = new RTCPeerConnection({
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+  ],
+});
+
+// 👇 ADD THIS HERE
+pc.onconnectionstatechange = () => {
+  console.log("Connection:", remoteId, pc.connectionState);
+};
+
+pc.oniceconnectionstatechange = () => {
+  console.log("ICE:", remoteId, pc.iceConnectionState);
+};
     pcsRef.current[remoteId] = pc;
 
     if (localStreamRef.current) {
@@ -676,41 +685,26 @@ export default function MeetingRoom() {
           return;
 
         case "user-joined":
-          if (msg.id === myId.current) return;
-          setParticipants((prev) => {
-            const existing = prev.find((p) => p.id === msg.id);
-            if (existing) {
-              return prev.map((p) => (
-                p.id === msg.id
-                  ? {
-                      ...p,
-                      name: msg.name || p.name,
-                      audioEnabled: msg.audioEnabled ?? p.audioEnabled ?? true,
-                      videoEnabled: msg.videoEnabled ?? p.videoEnabled ?? true,
-                    }
-                  : p
-              ));
-            }
+  if (msg.id === myId.current) return;
 
-            return [
-              ...prev,
-              {
-                id: msg.id,
-                name: msg.name || "Guest",
-                isLocal: false,
-                audioEnabled: msg.audioEnabled ?? true,
-                videoEnabled: msg.videoEnabled ?? true,
-              },
-            ];
-          });
+  let pc = pcsRef.current[msg.id];
+  if (!pc) {
+    pc = createPeerConnection(msg.id, msg.name, msg.audioEnabled, msg.videoEnabled);
+  }
 
-          if (!pcsRef.current[msg.id] && shouldInitiateConnection(msg.id)) {
-            const peer = createPeerConnection(msg.id, msg.name, true, true);
-            const offer = await peer.createOffer();
-            await peer.setLocalDescription(offer);
-            wsRef.current?.send(JSON.stringify({ ...peer.localDescription.toJSON(), from: myId.current, to: msg.id, name: participantName }));
-          }
-          return;
+  if (shouldInitiateConnection(msg.id)) {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    wsRef.current?.send(JSON.stringify({
+      type: "offer",
+      sdp: offer.sdp,
+      from: myId.current,
+      to: msg.id,
+      name: participantName,
+    }));
+  }
+  return;
 
         case "waiting":
           setIsInWaitingRoom(true);
@@ -741,25 +735,36 @@ export default function MeetingRoom() {
           );
           return;
 
-        case "join": {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: participantName }));
-          break;
-        }
-        case "offer": {
-          await pc.setRemoteDescription(new RTCSessionDescription(msg));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          socket.send(JSON.stringify({ ...pc.localDescription.toJSON(), from: myId.current, to: msg.from, name: participantName }));
-          break;
-        }
+
+case "offer": {
+  let pc = pcsRef.current[msg.from];
+  if (!pc) {
+    pc = createPeerConnection(msg.from, msg.name);
+  }
+
+  await pc.setRemoteDescription(new RTCSessionDescription(msg));
+
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+
+  wsRef.current?.send(JSON.stringify({
+    type: "answer",
+    sdp: answer.sdp,
+    from: myId.current,
+    to: msg.from,
+  }));
+  break;
+}
         case "answer":
           await pc.setRemoteDescription(new RTCSessionDescription(msg));
           break;
-        case "candidate":
-          if (pc) await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
-          break;
+case "candidate":
+  if (!pcsRef.current[msg.from]) return;
+
+  await pcsRef.current[msg.from].addIceCandidate(
+    new RTCIceCandidate(msg.candidate)
+  );
+  break;
         case "chat-message":
           setMessages((prev) => [...prev, { from: msg.name, text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
           setUnreadChatCount((count) => (chatOpen ? count : count + 1));
@@ -1117,9 +1122,9 @@ export default function MeetingRoom() {
           <div className="meeting-state-icon">
             <FaHourglassHalf />
           </div>
-        <h2>Waiting for host approval</h2>
-        <p>{waitMessage || "Please wait while the host approves your entry."}</p>
-      </div>
+          <h2>Waiting for host approval</h2>
+          <p>{waitMessage || "Please wait while the host approves your entry."}</p>
+        </div>
       </div>
     );
   }
