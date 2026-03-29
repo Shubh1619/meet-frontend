@@ -572,21 +572,21 @@ export default function MeetingRoom() {
 
   const createPeerConnection = useCallback((remoteId, remoteName, audioEnabled, videoEnabled) => {
     const pc = new RTCPeerConnection({
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
 
-    {
-      urls: "turn:openrelay.metered.ca:80",
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-    {
-      urls: "turn:openrelay.metered.ca:443",
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    }
-  ],
-});
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        }
+      ],
+    });
 
     pc.onconnectionstatechange = () => {
       console.log("Connection:", remoteId, pc.connectionState);
@@ -699,26 +699,26 @@ export default function MeetingRoom() {
           return;
 
         case "user-joined":
-  if (msg.id === myId.current) return;
+          if (msg.id === myId.current) return;
 
-  let pc = pcsRef.current[msg.id];
-  if (!pc) {
-    pc = createPeerConnection(msg.id, msg.name, msg.audioEnabled, msg.videoEnabled);
-  }
+          let pc = pcsRef.current[msg.id];
+          if (!pc) {
+            pc = createPeerConnection(msg.id, msg.name, msg.audioEnabled, msg.videoEnabled);
+          }
 
-  if (shouldInitiateConnection(msg.id)) {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+          if (shouldInitiateConnection(msg.id)) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
 
-    wsRef.current?.send(JSON.stringify({
-      type: "offer",
-      sdp: offer.sdp,
-      from: myId.current,
-      to: msg.id,
-      name: participantName,
-    }));
-  }
-  return;
+            wsRef.current?.send(JSON.stringify({
+              type: "offer",
+              sdp: offer.sdp,
+              from: myId.current,
+              to: msg.id,
+              name: participantName,
+            }));
+          }
+          return;
 
         case "waiting":
           setIsInWaitingRoom(true);
@@ -953,12 +953,14 @@ export default function MeetingRoom() {
     }
   }, [roomId, isLoggedIn, profileReady, meetingReady, hostAccessResolved, profileUser?.name, myName, joinCall, isHostUser, hostSessionId]);
 
+  // ❌ REMOVE THIS BLOCK
   useEffect(() => {
     if (isLoggedIn) return;
     if (!roomId || !meetingReady || !hostAccessResolved) return;
     if (hasJoinedRef.current) return;
 
     const rememberedName = sessionStorage.getItem(`meeting-guest-name:${roomId}`) || myName;
+
     if (!rememberedName || rememberedName === "Guest") return;
 
     const timer = setTimeout(() => {
@@ -1148,7 +1150,7 @@ export default function MeetingRoom() {
                 alert("Please enter your name to continue.");
                 return;
               }
-              joinCall(roomId || "default-room", trimmedName);
+              joinCall(roomId || "default-room", trimmedName); // ✅ ONLY HERE
             }}
           >
             Request to Join
