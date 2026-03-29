@@ -55,6 +55,7 @@ export default function MeetingRoom() {
   const cameraStreamRef = useRef(null);
   const screenStreamRef = useRef(null);
   const pcsRef = useRef({});
+  const iceQueueRef = useRef({});
   const wsRef = useRef(null);
   const myId = useRef(null);
   const hasJoinedRef = useRef(false);
@@ -503,6 +504,7 @@ export default function MeetingRoom() {
 
     Object.values(pcsRef.current).forEach((pc) => pc.close());
     pcsRef.current = {};
+    iceQueueRef.current = {};
 
     if (wsRef.current) {
       wsRef.current.onclose = null;
@@ -569,21 +571,21 @@ export default function MeetingRoom() {
   }, []);
 
   const createPeerConnection = useCallback((remoteId, remoteName, audioEnabled, videoEnabled) => {
-const pc = new RTCPeerConnection({
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-  ],
-});
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+      ],
+    });
 
-// 👇 ADD THIS HERE
-pc.onconnectionstatechange = () => {
-  console.log("Connection:", remoteId, pc.connectionState);
-};
+    pc.onconnectionstatechange = () => {
+      console.log("Connection:", remoteId, pc.connectionState);
+    };
 
-pc.oniceconnectionstatechange = () => {
-  console.log("ICE:", remoteId, pc.iceConnectionState);
-};
+    pc.oniceconnectionstatechange = () => {
+      console.log("ICE:", remoteId, pc.iceConnectionState);
+    };
+
     pcsRef.current[remoteId] = pc;
 
     if (localStreamRef.current) {
@@ -598,6 +600,7 @@ pc.oniceconnectionstatechange = () => {
       const nextVideoEnabled = typeof videoEnabled === "boolean"
         ? videoEnabled
         : (stream.getVideoTracks()[0]?.enabled ?? true);
+
       setParticipants((prev) => {
         const exists = prev.find((p) => p.id === remoteId);
         if (exists) {
@@ -606,19 +609,20 @@ pc.oniceconnectionstatechange = () => {
               ? { ...p, stream, audioEnabled: nextAudioEnabled, videoEnabled: nextVideoEnabled }
               : p
           ));
-        } else {
-          return [
-            ...prev,
-            {
-              id: remoteId,
-              name: remoteName,
-              stream,
-              audioEnabled: nextAudioEnabled,
-              videoEnabled: nextVideoEnabled,
-            },
-          ];
         }
+
+        return [
+          ...prev,
+          {
+            id: remoteId,
+            name: remoteName,
+            stream,
+            audioEnabled: nextAudioEnabled,
+            videoEnabled: nextVideoEnabled,
+          },
+        ];
       });
+
       monitorAudioLevel(stream, remoteId);
     };
 
@@ -736,35 +740,62 @@ pc.oniceconnectionstatechange = () => {
           return;
 
 
-case "offer": {
-  let pc = pcsRef.current[msg.from];
-  if (!pc) {
-    pc = createPeerConnection(msg.from, msg.name);
-  }
+        case "offer": {
+          let offerPc = pcsRef.current[msg.from];
+          if (!offerPc) {
+            offerPc = createPeerConnection(msg.from, msg.name);
+          }
 
-  await pc.setRemoteDescription(new RTCSessionDescription(msg));
+          await offerPc.setRemoteDescription(new RTCSessionDescription(msg));
 
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
+          if (iceQueueRef.current[msg.from]?.length) {
+            for (const queuedCandidate of iceQueueRef.current[msg.from]) {
+              await offerPc.addIceCandidate(new RTCIceCandidate(queuedCandidate));
+            }
+            iceQueueRef.current[msg.from] = [];
+          }
 
-  wsRef.current?.send(JSON.stringify({
-    type: "answer",
-    sdp: answer.sdp,
-    from: myId.current,
-    to: msg.from,
-  }));
-  break;
-}
-        case "answer":
-          await pc.setRemoteDescription(new RTCSessionDescription(msg));
+          const answer = await offerPc.createAnswer();
+          await offerPc.setLocalDescription(answer);
+
+          wsRef.current?.send(JSON.stringify({
+            type: "answer",
+            sdp: answer.sdp,
+            from: myId.current,
+            to: msg.from,
+          }));
           break;
-case "candidate":
-  if (!pcsRef.current[msg.from]) return;
+        }
+        case "answer": {
+          let answerPc = pcsRef.current[msg.from];
+          if (!answerPc) {
+            answerPc = createPeerConnection(msg.from, msg.name, msg.audioEnabled, msg.videoEnabled);
+          }
 
-  await pcsRef.current[msg.from].addIceCandidate(
-    new RTCIceCandidate(msg.candidate)
-  );
-  break;
+          await answerPc.setRemoteDescription(new RTCSessionDescription(msg));
+
+          if (iceQueueRef.current[msg.from]?.length) {
+            for (const queuedCandidate of iceQueueRef.current[msg.from]) {
+              await answerPc.addIceCandidate(new RTCIceCandidate(queuedCandidate));
+            }
+            iceQueueRef.current[msg.from] = [];
+          }
+          break;
+        }
+        case "candidate": {
+          const candidatePc = pcsRef.current[msg.from];
+          if (!candidatePc) return;
+
+          if (candidatePc.remoteDescription && candidatePc.remoteDescription.type) {
+            await candidatePc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+          } else {
+            if (!iceQueueRef.current[msg.from]) {
+              iceQueueRef.current[msg.from] = [];
+            }
+            iceQueueRef.current[msg.from].push(msg.candidate);
+          }
+          break;
+        }
         case "chat-message":
           setMessages((prev) => [...prev, { from: msg.name, text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
           setUnreadChatCount((count) => (chatOpen ? count : count + 1));
@@ -785,6 +816,7 @@ case "candidate":
             pcsRef.current[msg.id].close();
             delete pcsRef.current[msg.id];
           }
+          delete iceQueueRef.current[msg.id];
           setParticipants((prev) => prev.filter((p) => p.id !== msg.id));
           setPinnedParticipantId((prev) => (prev === msg.id ? null : prev));
           break;
@@ -936,6 +968,7 @@ case "candidate":
 
       Object.values(pcsRef.current).forEach((pc) => pc.close());
       pcsRef.current = {};
+      iceQueueRef.current = {};
 
       if (wsRef.current) {
         wsRef.current.onclose = null;
