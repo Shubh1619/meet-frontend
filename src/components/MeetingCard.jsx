@@ -6,7 +6,11 @@ import { FaLink, FaUser, FaCopy, FaTrash } from "react-icons/fa";
 
 export default function MeetingCard({ meeting, onDelete }) {
   const { darkMode } = useDarkMode();
-  const [owner, setOwner] = useState(null);
+  const [owner, setOwner] = useState(
+    meeting?.owner_name
+      ? { name: meeting.owner_name, email: meeting.owner_email || "" }
+      : null
+  );
   const [copied, setCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const navigate = useNavigate();
@@ -21,8 +25,13 @@ export default function MeetingCard({ meeting, onDelete }) {
       }
     }
 
+    if (meeting.owner_name) {
+      setOwner({ name: meeting.owner_name, email: meeting.owner_email || "" });
+      return;
+    }
+
     if (meeting.owner_id) loadOwner();
-  }, [meeting.owner_id]);
+  }, [meeting.owner_id, meeting.owner_name, meeting.owner_email]);
 
   const cardBg = darkMode ? "#16213e" : "#FAFAFF";
   const borderColor = darkMode ? "#333" : "#eee";
@@ -59,6 +68,10 @@ export default function MeetingCard({ meeting, onDelete }) {
       setDeleting(false);
     }
   };
+
+  const canDelete = typeof meeting.can_delete === "boolean"
+    ? meeting.can_delete
+    : (meeting.meeting_type === "regular" && meeting.role === "owner");
 
   return (
     <div
@@ -146,7 +159,7 @@ export default function MeetingCard({ meeting, onDelete }) {
         )}
 
         {/* Delete Button - Only for scheduled (regular) meetings */}
-        {meeting.meeting_type === "regular" && meeting.role === "owner" && (
+        {canDelete && (
           <button
             onClick={handleDelete}
             disabled={deleting}
