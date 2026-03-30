@@ -5,6 +5,7 @@ import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
 import RecordingModal from "./RecordingModal";
 import VideoTile from "./VideoTile";
+import useMeetingPermissions from "../hooks/useMeetingPermissions";
 import "./MeetingRoom.css";
 
 export default function MeetingRoom() {
@@ -49,6 +50,19 @@ export default function MeetingRoom() {
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [captions, setCaptions] = useState({});
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
+  const [toast, setToast] = useState("");
+
+  const {
+    permissionState,
+    setRole,
+    setPermissions,
+    applyPermissionUpdate,
+    canPrivateMessage,
+    canGenerateAI,
+    canUseCaptions,
+    canScreenShare,
+    canAdminControl,
+  } = useMeetingPermissions(isLoggedIn ? "user" : "guest");
 
   // --- Media/WebRTC ---
   const localStreamRef = useRef(null);
@@ -184,6 +198,26 @@ export default function MeetingRoom() {
       ignore = true;
     };
   }, [roomId]);
+
+  useEffect(() => {
+    setRole(isHostUser ? "host" : isLoggedIn ? "user" : "guest");
+  }, [isHostUser, isLoggedIn, setRole]);
+
+  useEffect(() => {
+    const sourcePermissions = meetingInfo?.settings || meetingInfo?.meeting?.permissions || {};
+    setPermissions({
+      allow_user_ai: sourcePermissions.allow_user_ai,
+      allow_user_captions: sourcePermissions.allow_user_captions,
+      allow_guest_screen_share: sourcePermissions.allow_guest_screen_share,
+      allow_user_screen_share: sourcePermissions.allow_user_screen_share,
+    });
+  }, [meetingInfo, setPermissions]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(""), 2600);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     if (!meetingReady) return;
@@ -347,6 +381,10 @@ export default function MeetingRoom() {
   }
 
   const toggleScreenShare = useCallback(async () => {
+    if (!canScreenShare) {
+      setToast("Feature disabled by host");
+      return;
+    }
     const localStream = localStreamRef.current;
     if (!localStream) return;
 
@@ -420,7 +458,21 @@ export default function MeetingRoom() {
       screenStreamRef.current.getTracks().forEach((track) => track.stop());
       screenStreamRef.current = null;
     }
-  }, [isScreenSharing, myName, setLocalStreamHandler]);
+  }, [canScreenShare, isScreenSharing, myName, setLocalStreamHandler]);
+
+  useEffect(() => {
+    if (!canScreenShare && isScreenSharing) {
+      toggleScreenShare();
+      setToast("Screen share was turned off by host");
+    }
+  }, [canScreenShare, isScreenSharing, toggleScreenShare]);
+
+  useEffect(() => {
+    if (!canUseCaptions && captionsEnabled) {
+      setCaptionsEnabled(false);
+      setToast("Captions were turned off by host");
+    }
+  }, [canUseCaptions, captionsEnabled]);
 
   const startRecording = useCallback(async () => {
     try {
@@ -684,6 +736,13 @@ export default function MeetingRoom() {
       }
 
       switch (msg.type) {
+        case "permission_update":
+          applyPermissionUpdate(msg);
+          setToast("Meeting permissions updated");
+          return;
+        case "error":
+          setToast(msg.message || "Permission denied");
+          return;
         case "waiting-user":
           setWaitingUsers((prev) => {
             const existing = prev.find((u) => u.client_id === msg.client_id);
@@ -699,7 +758,10 @@ export default function MeetingRoom() {
           return;
 
         case "user-joined":
-          if (msg.id === myId.current) return;
+          if (msg.id === myId.current) {
+            if (msg.role) setRole(msg.role);
+            return;
+          }
 
           let pc = pcsRef.current[msg.id];
           if (!pc) {
@@ -726,6 +788,7 @@ export default function MeetingRoom() {
           return;
 
         case "approved":
+          if (msg.role) setRole(msg.role);
           setIsInWaitingRoom(false);
           setRoomVisible(true);
           setWaitMessage("");
@@ -810,6 +873,10 @@ export default function MeetingRoom() {
           setMessages((prev) => [...prev, { from: msg.name, text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
           setUnreadChatCount((count) => (chatOpen ? count : count + 1));
           break;
+        case "private-message":
+          setMessages((prev) => [...prev, { from: msg.name || "Private", text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
+          setUnreadChatCount((count) => (chatOpen ? count : count + 1));
+          break;
         case "waiting-user-left":
           setWaitingUsers((prev) => prev.filter((user) => user.client_id !== msg.client_id));
           break;
@@ -847,7 +914,7 @@ export default function MeetingRoom() {
         }
       }, 5000);
     };
-  }, [captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting]);
+  }, [applyPermissionUpdate, captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting, setRole]);
 
   useEffect(() => {
     reconnectFnRef.current = connectWebSocket;
@@ -1038,17 +1105,63 @@ export default function MeetingRoom() {
 
   const approveGuest = (client_id) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "approve", target_client_id: client_id }));
+      wsRef.current.send(JSON.stringify({ type: "admit_user", target_client_id: client_id }));
       setWaitingUsers((prev) => prev.filter((u) => u.client_id !== client_id));
     }
   };
 
   const denyGuest = (client_id) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "deny", target_client_id: client_id }));
+      wsRef.current.send(JSON.stringify({ type: "deny_user", target_client_id: client_id }));
       setWaitingUsers((prev) => prev.filter((u) => u.client_id !== client_id));
     }
   };
+
+  const sendHostAction = useCallback((type, target_client_id) => {
+    if (!canAdminControl) {
+      setToast("Host only action");
+      return;
+    }
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type, target_client_id }));
+    }
+  }, [canAdminControl]);
+
+  const generateAISummary = useCallback(() => {
+    if (!canGenerateAI) {
+      setToast("Feature disabled by host");
+      return;
+    }
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "generate_ai_summary", room_id: roomId }));
+      setToast("AI summary request sent");
+    }
+  }, [canGenerateAI, roomId]);
+
+  const togglePermissions = useCallback(async (nextPermissions) => {
+    if (!canAdminControl) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/meeting/${roomId}/permissions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify(nextPermissions),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setToast(data?.error || "Permission denied");
+        return;
+      }
+      applyPermissionUpdate({ permissions: data.permissions });
+      setToast("Permissions updated");
+    } catch (error) {
+      console.error("Permission update failed", error);
+      setToast("Failed to update permissions");
+    }
+  }, [applyPermissionUpdate, canAdminControl, roomId]);
 
   // --- Captions ---
   useEffect(() => {
@@ -1204,7 +1317,7 @@ export default function MeetingRoom() {
         </div>
 
         {/* Waiting room requests (host only) */}
-        {waitingUsers.length > 0 && (
+        {canAdminControl && waitingUsers.length > 0 && (
           <div className="waiting-room-notification">
             <div className="waiting-room-heading">
               <strong>New user requests waiting approval</strong>
@@ -1222,6 +1335,48 @@ export default function MeetingRoom() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {canAdminControl && (
+          <div className="waiting-room-notification" style={{ marginTop: 12 }}>
+            <div className="waiting-room-heading">
+              <strong>Host Permission Controls</strong>
+            </div>
+            <div className="waiting-room-actions">
+              <button
+                className="approve-btn"
+                onClick={() => togglePermissions({ allow_user_ai: !permissionState.permissions.allow_user_ai })}
+              >
+                User AI: {permissionState.permissions.allow_user_ai ? "ON" : "OFF"}
+              </button>
+              <button
+                className="approve-btn"
+                onClick={() => togglePermissions({ allow_user_captions: !permissionState.permissions.allow_user_captions })}
+              >
+                User Captions: {permissionState.permissions.allow_user_captions ? "ON" : "OFF"}
+              </button>
+              <button
+                className="approve-btn"
+                onClick={() =>
+                  togglePermissions({
+                    allow_user_screen_share: !permissionState.permissions.allow_user_screen_share,
+                  })
+                }
+              >
+                User Share: {permissionState.permissions.allow_user_screen_share ? "ON" : "OFF"}
+              </button>
+              <button
+                className="approve-btn"
+                onClick={() =>
+                  togglePermissions({
+                    allow_guest_screen_share: !permissionState.permissions.allow_guest_screen_share,
+                  })
+                }
+              >
+                Guest Share: {permissionState.permissions.allow_guest_screen_share ? "ON" : "OFF"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -1274,6 +1429,29 @@ export default function MeetingRoom() {
               ))}
         </div>
 
+        {canAdminControl && participants.filter((p) => p.id !== "you").length > 0 && (
+          <div className="waiting-room-notification" style={{ marginTop: 12 }}>
+            <div className="waiting-room-heading">
+              <strong>Participant Admin Controls</strong>
+            </div>
+            {participants
+              .filter((p) => p.id !== "you")
+              .map((p) => (
+                <div key={`admin-${p.id}`} className="waiting-room-row">
+                  <div>
+                    <div className="waiting-user-name">{p.name || "Participant"}</div>
+                    <div className="waiting-user-subtitle">{p.id}</div>
+                  </div>
+                  <div className="waiting-room-actions">
+                    <button className="approve-btn" onClick={() => sendHostAction("mute_user", p.id)}>Mute</button>
+                    <button className="approve-btn" onClick={() => sendHostAction("disable_camera", p.id)}>Cam Off</button>
+                    <button className="deny-btn" onClick={() => sendHostAction("kick_user", p.id)}>Kick</button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+
         {/* Controls */}
         <ControlsBar
           isMicOn={localParticipant?.audioEnabled ?? true}
@@ -1287,6 +1465,10 @@ export default function MeetingRoom() {
           onToggleCamera={() => toggleCamera()}
           onShareScreen={() => toggleScreenShare()}
           onRecord={() => {
+            if (!canAdminControl) {
+              setToast("Host only action");
+              return;
+            }
             if (isRecording) {
               stopRecording();
               return;
@@ -1294,9 +1476,21 @@ export default function MeetingRoom() {
             setRecordingModalMode("start");
             setRecordingModalOpen(true);
           }}
-          onCaptions={() => setCaptionsEnabled(!captionsEnabled)}
+          onCaptions={() => {
+            if (!canUseCaptions) {
+              setToast("Feature disabled by host");
+              return;
+            }
+            setCaptionsEnabled(!captionsEnabled);
+          }}
+          onGenerateAI={() => generateAISummary()}
           onChat={() => setChatOpen(!chatOpen)}
           onLeave={() => leaveMeeting()}
+          canShareScreen={canScreenShare}
+          canCaptions={canUseCaptions}
+          canRecord={canAdminControl}
+          canGenerateAI={canGenerateAI}
+          canAdminControl={canAdminControl}
         />
 
         {/* Chat Sidebar */}
@@ -1307,7 +1501,14 @@ export default function MeetingRoom() {
           msgInput={msgInput}
           setMsgInput={setMsgInput}
           sendMessage={() => sendChatMessage(msgInput)}
+          canPrivateMessage={canPrivateMessage}
         />
+
+        {toast && (
+          <div className="meeting-state-card" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, padding: "10px 14px" }}>
+            <p style={{ margin: 0 }}>{toast}</p>
+          </div>
+        )}
 
         {/* Recording Modal */}
         <RecordingModal

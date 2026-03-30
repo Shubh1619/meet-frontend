@@ -24,8 +24,14 @@ const ControlsBar = ({
   onShareScreen,
   onRecord,
   onCaptions,
+  onGenerateAI,
   onChat,
-  onLeave
+  onLeave,
+  canShareScreen = true,
+  canCaptions = true,
+  canRecord = true,
+  canGenerateAI = false,
+  canAdminControl = false,
 }) => {
   const controls = [
     {
@@ -48,6 +54,8 @@ const ControlsBar = ({
       icon: <FaDesktop />,
       onClick: onShareScreen,
       active: isSharingScreen,
+      hidden: !canShareScreen,
+      disabled: !canShareScreen,
     },
     {
       key: "record",
@@ -56,6 +64,8 @@ const ControlsBar = ({
       onClick: onRecord,
       active: isRecording,
       accent: "record",
+      hidden: !canRecord,
+      disabled: !canRecord,
     },
     {
       key: "captions",
@@ -63,6 +73,17 @@ const ControlsBar = ({
       icon: <FaClosedCaptioning />,
       onClick: onCaptions,
       active: captionsEnabled,
+      hidden: !canCaptions,
+      disabled: !canCaptions,
+    },
+    {
+      key: "ai-summary",
+      label: "AI Summary",
+      icon: <FaCircle />,
+      onClick: onGenerateAI,
+      active: false,
+      hidden: !canGenerateAI,
+      disabled: !canGenerateAI,
     },
     {
       key: "chat",
@@ -76,12 +97,14 @@ const ControlsBar = ({
   return (
     <div className="controls-dock">
       <div className="controls-bar">
-        {controls.map((control) => (
+        {controls.filter((control) => !control.hidden).map((control) => (
           <button
             key={control.key}
             type="button"
             className={`control-button${control.active ? " is-active" : ""}${control.accent ? ` control-${control.accent}` : ""}`}
             onClick={control.onClick}
+            disabled={control.disabled}
+            title={control.disabled ? "Disabled by host" : control.label}
           >
             <span className="control-icon">{control.icon}</span>
             <span className="control-label">{control.label}</span>
@@ -90,6 +113,11 @@ const ControlsBar = ({
             )}
           </button>
         ))}
+        {canAdminControl && (
+          <span className="control-badge" style={{ marginLeft: 8 }}>
+            Host Controls Enabled
+          </span>
+        )}
         <button type="button" className="control-button control-leave" onClick={onLeave}>
           <span className="control-icon">
             <FaPhoneSlash />

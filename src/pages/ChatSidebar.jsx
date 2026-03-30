@@ -1,6 +1,14 @@
 import React from "react";
 
-const ChatSidebar = ({ isOpen, messages, onClose, msgInput, setMsgInput, sendMessage }) => {
+const ChatSidebar = ({
+  isOpen,
+  messages,
+  onClose,
+  msgInput,
+  setMsgInput,
+  sendMessage,
+  canPrivateMessage = false,
+}) => {
   if (!isOpen) return null;
 
   return (
@@ -9,6 +17,7 @@ const ChatSidebar = ({ isOpen, messages, onClose, msgInput, setMsgInput, sendMes
         <div>
           <h3>Chat</h3>
           <p>{messages.length} message(s)</p>
+          {!canPrivateMessage && <p style={{ margin: 0 }}>Private chat disabled for guest</p>}
         </div>
         <button type="button" className="chat-sidebar-close" onClick={onClose}>Close</button>
       </div>
