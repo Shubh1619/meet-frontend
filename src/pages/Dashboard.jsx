@@ -43,17 +43,17 @@ export default function Dashboard() {
         const [year, month] = selectedDate.split("-");
         const monthStr = `${year}-${month}`;
         
-        const [meetingsRes, monthMeetingsRes, monthNotesRes, notesRes] = await Promise.all([
-          apiGet(`/meetings?date=${selectedDate}`),
-          apiGet(`/meetings/month?month=${monthStr}`),
+        const [dashboardMeetingsRes, monthNotesRes, notesRes] = await Promise.all([
+          apiGet("/meetings/dashboard"),
           apiGet(`/notes/month?month=${monthStr}`),
           apiGet(`/notes/by-date?date=${selectedDate}`)
         ]);
         
         if (!isMountedRef.current) return;
-        
-        setMeetings(meetingsRes.meetings || []);
-        setMeetingDates(monthMeetingsRes.dates || []);
+
+        const groupedMeetings = dashboardMeetingsRes || {};
+        setMeetings(groupedMeetings[selectedDate] || []);
+        setMeetingDates(Object.keys(groupedMeetings));
         setNoteDates(monthNotesRes.dates || []);
         
         const notes = notesRes.notes || [];

@@ -146,7 +146,7 @@ export default function MeetingCard({ meeting, onDelete }) {
         )}
 
         {/* Delete Button - Only for scheduled (regular) meetings */}
-        {meeting.meeting_type === "regular" && (
+        {meeting.meeting_type === "regular" && meeting.role === "owner" && (
           <button
             onClick={handleDelete}
             disabled={deleting}
