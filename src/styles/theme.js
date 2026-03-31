@@ -1,4 +1,4 @@
-// theme.js - design tokens for Meetify
+// theme.js - design tokens for Meeting Platform
 const theme = {
   colors: {
     primary: "#6759FF",
@@ -24,3 +24,4 @@ const theme = {
 };
 
 export default theme;
+

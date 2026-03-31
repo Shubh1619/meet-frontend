@@ -132,7 +132,7 @@ export default function ScheduleMeeting() {
               M
             </Box>
             <Box sx={{ fontSize: 20, fontWeight: 600, color: "primary.main" }}>
-              Meetify
+              Meeting Platform
             </Box>
           </Box>
 
@@ -233,3 +233,4 @@ export default function ScheduleMeeting() {
     </ThemeProvider>
   );
 }
+

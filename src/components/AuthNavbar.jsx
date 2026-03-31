@@ -35,7 +35,7 @@ export default function AuthNavbar() {
             }}
           >
             <div className="site-navbar-logo">M</div>
-            <div className="site-navbar-title">Meetify</div>
+            <div className="site-navbar-title">Meeting Platform</div>
           </div>
 
           <button
@@ -190,3 +190,4 @@ export default function AuthNavbar() {
     </>
   );
 }
+

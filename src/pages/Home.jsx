@@ -60,7 +60,7 @@ export default function Home() {
           >
             M
           </div>
-          Meetify
+          Meeting Platform
         </div>
 
         {/* Center: Nav Links */}
@@ -118,7 +118,7 @@ export default function Home() {
           <div style={{ textAlign: "left" }}>
             <h1 style={{ fontSize: "2.5rem", color: textColor, lineHeight: 1.3 }}>
               Make Meetings Smarter with{" "}
-              <span style={{ color: "#6759FF" }}>Meetify 🚀</span>
+              <span style={{ color: "#6759FF" }}>Meeting Platform 🚀</span>
             </h1>
             <p
               style={{
@@ -250,7 +250,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Why Choose Meetify */}
+        {/* Why Choose Meeting Platform */}
         <section
           style={{
             background: sectionBg,
@@ -259,7 +259,7 @@ export default function Home() {
             textAlign: "center",
           }}
         >
-          <h2 style={{ color: textColor }}>Why Choose Meetify?</h2>
+          <h2 style={{ color: textColor }}>Why Choose Meeting Platform?</h2>
           <div
             style={{
               display: "flex",
@@ -484,7 +484,7 @@ export default function Home() {
           }}
         >
           <p style={{ margin: 0 }}>
-            © {new Date().getFullYear()} Meetify. All rights reserved.
+            © {new Date().getFullYear()} Meeting Platform. All rights reserved.
           </p>
           <p style={{ color: mutedColor, fontSize: "0.9rem", marginTop: "0.3rem" }}>
             <a href="#home">Home</a> • <a href="#features">Features</a> •{" "}

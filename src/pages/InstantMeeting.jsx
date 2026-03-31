@@ -157,7 +157,7 @@ export default function InstantMeeting() {
             M
           </div>
           <div style={{ fontSize: 20, fontWeight: 600, color: "#6759FF" }}>
-            Meetify
+            Meeting Platform
           </div>
         </div>
 
@@ -310,4 +310,5 @@ const copyBtnStyle = {
   fontWeight: 600,
   cursor: "pointer",
 };
+
 

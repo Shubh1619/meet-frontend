@@ -220,7 +220,7 @@ export default function Profile() {
         </div>
 
         <div style={{ ...styles.footer, background: softBg, color: mutedColor }}>
-          <p>Meetify - AI Meeting Assistant</p>
+          <p>Meeting Platform - AI Meeting Assistant</p>
           <p style={styles.version}>Version 1.0.0</p>
         </div>
       </div>
@@ -468,3 +468,4 @@ const styles = {
     fontSize: "0.75rem",
   },
 };
+

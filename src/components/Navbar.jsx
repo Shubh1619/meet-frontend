@@ -60,7 +60,7 @@ export default function Navbar() {
                 color: "#6759FF",
               }}
             >
-              Meetify
+              Meeting Platform
             </div>
             <div style={{ fontSize: 12, color: "#606074" }}>
               Meeting management
@@ -113,3 +113,4 @@ export default function Navbar() {
     </nav>
   );
 }
+

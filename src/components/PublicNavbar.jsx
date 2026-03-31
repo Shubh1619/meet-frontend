@@ -26,7 +26,7 @@ export default function PublicNavbar() {
           }}
         >
           <div className="site-navbar-logo">M</div>
-          <div className="site-navbar-title">Meetify</div>
+          <div className="site-navbar-title">Meeting Platform</div>
         </div>
 
         <button
@@ -61,3 +61,4 @@ export default function PublicNavbar() {
     </nav>
   );
 }
+

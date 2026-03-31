@@ -132,7 +132,7 @@ export default function Login() {
             M
           </div>
           <div style={{ fontSize: 20, fontWeight: 600, color: "#6759FF" }}>
-            Meetify
+            Meeting Platform
           </div>
         </div>
 
