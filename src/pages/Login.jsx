@@ -194,6 +194,23 @@ export default function Login() {
               {loading ? "Logging in..." : "Login"}
             </ActionButton>
           </div>
+
+          <div style={{ textAlign: "right", marginTop: "0.8rem" }}>
+            <button
+              type="button"
+              onClick={() => nav("/forgot-password")}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#6759FF",
+                fontWeight: 600,
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              Forgot Password?
+            </button>
+          </div>
         </form>
 
         <p style={{ marginTop: "1rem", fontSize: "0.9rem", color: mutedColor }}>

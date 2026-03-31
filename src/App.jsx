@@ -1,5 +1,5 @@
-import React from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 
 import PublicNavbar from "./components/PublicNavbar";
 import AuthNavbar from "./components/AuthNavbar";
@@ -7,6 +7,8 @@ import AuthNavbar from "./components/AuthNavbar";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import ScheduleMeeting from "./pages/ScheduleMeeting";
 import InstantMeeting from "./pages/InstantMeeting";
@@ -22,9 +24,18 @@ function ProtectedRoute({ children }) {
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
-  const publicRoutes = ["/", "/login", "/register"];
+  useEffect(() => {
+    const hash = window.location.hash || "";
+    if (hash.startsWith("#/reset-password")) {
+      const query = hash.includes("?") ? hash.slice(hash.indexOf("?")) : "";
+      navigate(`/reset-password${query}`, { replace: true });
+    }
+  }, [navigate]);
+
+  const publicRoutes = ["/", "/login", "/register", "/forgot-password", "/reset-password"];
   const isMeetingRoom = location.pathname.startsWith("/meeting/");
   const usePublicNavbar = publicRoutes.includes(location.pathname) || !token || isMeetingRoom;
 
@@ -37,6 +48,8 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/meeting/:roomId" element={<MeetingRoom />} />
 
           <Route

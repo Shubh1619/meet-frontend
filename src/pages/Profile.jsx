@@ -9,6 +9,12 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdError, setPwdError] = useState("");
+  const [pwdSuccess, setPwdSuccess] = useState("");
 
   useEffect(() => {
     if (!localStorage.getItem("token")) {
@@ -68,6 +74,70 @@ export default function Profile() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     navigate("/login");
+  };
+
+  const validateNewPassword = (value) => {
+    if (!value || value.length < 8) return "Password must be at least 8 characters.";
+    if (!/[A-Z]/.test(value)) return "Password must include at least one uppercase letter.";
+    if (!/[a-z]/.test(value)) return "Password must include at least one lowercase letter.";
+    if (!/\d/.test(value)) return "Password must include at least one number.";
+    if (!/[!@#$%^&*(),.?\":{}|<>]/.test(value)) return "Password must include at least one special character.";
+    return "";
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwdError("");
+    setPwdSuccess("");
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setPwdError("All password fields are required.");
+      return;
+    }
+
+    const pwdValidation = validateNewPassword(newPassword);
+    if (pwdValidation) {
+      setPwdError(pwdValidation);
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPwdError("New password and confirm password do not match.");
+      return;
+    }
+
+    if (newPassword === oldPassword) {
+      setPwdError("New password must be different from current password.");
+      return;
+    }
+
+    setPwdLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          old_password: oldPassword,
+          new_password: newPassword,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Failed to change password.");
+
+      setPwdSuccess(data.message || "Password changed successfully.");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      setPwdError(err.message || "Something went wrong.");
+    } finally {
+      setPwdLoading(false);
+    }
   };
 
   const cardBg = darkMode ? "#16213e" : "#fff";
@@ -186,6 +256,84 @@ export default function Profile() {
               Dashboard
             </button>
           </div>
+        </div>
+
+        <div style={{ ...styles.section, borderBottom: `1px solid ${borderColor}` }}>
+          <h3 style={styles.sectionTitle}>Security</h3>
+
+          {pwdError && (
+            <div style={styles.errorAlert}>
+              {pwdError}
+            </div>
+          )}
+
+          {pwdSuccess && (
+            <div
+              style={{
+                background: "#e9fbe9",
+                color: "#1d7c35",
+                padding: "0.8rem 1rem",
+                borderRadius: 10,
+                marginBottom: "1rem",
+              }}
+            >
+              {pwdSuccess}
+            </div>
+          )}
+
+          <form onSubmit={handleChangePassword}>
+            <label className="small-muted" style={{ color: mutedColor }}>
+              Current Password
+            </label>
+            <input
+              type="password"
+              className="input mt-1"
+              value={oldPassword}
+              onChange={(e) => setOldPassword(e.target.value)}
+              style={{ background: softBg, color: textColor, borderColor }}
+            />
+
+            <label className="small-muted mt-1" style={{ color: mutedColor }}>
+              New Password
+            </label>
+            <input
+              type="password"
+              className="input mt-1"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              style={{ background: softBg, color: textColor, borderColor }}
+            />
+
+            <label className="small-muted mt-1" style={{ color: mutedColor }}>
+              Confirm New Password
+            </label>
+            <input
+              type="password"
+              className="input mt-1"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              style={{ background: softBg, color: textColor, borderColor }}
+            />
+
+            <button
+              type="submit"
+              style={{
+                width: "100%",
+                marginTop: "1rem",
+                padding: "0.8rem",
+                borderRadius: 10,
+                border: "none",
+                background: "#6759FF",
+                color: "#fff",
+                fontWeight: 600,
+                cursor: pwdLoading ? "not-allowed" : "pointer",
+                opacity: pwdLoading ? 0.75 : 1,
+              }}
+              disabled={pwdLoading}
+            >
+              {pwdLoading ? "Updating..." : "Change Password"}
+            </button>
+          </form>
         </div>
 
         <div style={styles.dangerZone}>
