@@ -1,48 +1,76 @@
-import React, { useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useDarkMode } from "../context/DarkModeContext";
+
+function formatDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function isSameDay(d1, d2) {
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
+}
 
 export default function CalendarView({
   selectedDate,
   onSelectDate,
   meetingDates = [],
-  noteDates = []
+  noteDates = [],
 }) {
   const { darkMode } = useDarkMode();
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-
-  const monthEnd = new Date(
-    currentMonth.getFullYear(),
-    currentMonth.getMonth() + 1,
-    0
+  const initialDate = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date();
+  const [currentMonth, setCurrentMonth] = useState(
+    new Date(initialDate.getFullYear(), initialDate.getMonth(), 1),
   );
-  const daysInMonth = monthEnd.getDate();
 
-  const prevMonth = () =>
-    setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1)
-    );
+  // Sync visible month only when selected date changes from outside.
+  useEffect(() => {
+    if (!selectedDate) return;
+    const selected = new Date(`${selectedDate}T00:00:00`);
+    const selectedMonth = new Date(selected.getFullYear(), selected.getMonth(), 1);
 
-  const nextMonth = () =>
-    setCurrentMonth(
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1)
-    );
+    setCurrentMonth((prev) => {
+      if (
+        prev.getFullYear() === selectedMonth.getFullYear() &&
+        prev.getMonth() === selectedMonth.getMonth()
+      ) {
+        return prev;
+      }
+      return selectedMonth;
+    });
+  }, [selectedDate]);
 
-  const formatDate = (date) => {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
+  const prevMonth = () => {
+    const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1);
+    setCurrentMonth(next);
   };
 
-  const days = [...Array(daysInMonth).keys()].map(
-    (d) =>
-      new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d + 1)
-  );
+  const nextMonth = () => {
+    const next = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1);
+    setCurrentMonth(next);
+  };
 
-  const isSameDay = (d1, d2) =>
-    d1.getFullYear() === d2.getFullYear() &&
-    d1.getMonth() === d2.getMonth() &&
-    d1.getDate() === d2.getDate();
+  const calendarCells = useMemo(() => {
+    const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const startWeekday = firstDayOfMonth.getDay();
+
+    // Fixed 6x7 grid like standard calendars.
+    const gridStart = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1 - startWeekday);
+
+    return Array.from({ length: 42 }, (_, idx) => {
+      const date = new Date(gridStart);
+      date.setDate(gridStart.getDate() + idx);
+      return {
+        date,
+        inCurrentMonth: date.getMonth() === currentMonth.getMonth(),
+      };
+    });
+  }, [currentMonth]);
 
   const dayBg = darkMode ? "#0f0f23" : "#F8F9FF";
   const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
@@ -50,12 +78,12 @@ export default function CalendarView({
 
   return (
     <div>
-      {/* Header */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           marginBottom: "1rem",
+          alignItems: "center",
         }}
       >
         <button
@@ -68,12 +96,11 @@ export default function CalendarView({
             color: "#6759FF",
           }}
         >
-          ‹
+          {"<"}
         </button>
 
         <div style={{ fontWeight: 600, color: textColor }}>
-          {currentMonth.toLocaleString("default", { month: "long" })}{" "}
-          {currentMonth.getFullYear()}
+          {currentMonth.toLocaleString("default", { month: "long" })} {currentMonth.getFullYear()}
         </div>
 
         <button
@@ -86,16 +113,15 @@ export default function CalendarView({
             color: "#6759FF",
           }}
         >
-          ›
+          {">"}
         </button>
       </div>
 
-      {/* Days Grid */}
       <div
+        className="calendar-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
-          gap: "0.5rem",
+          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
           textAlign: "center",
         }}
       >
@@ -105,34 +131,28 @@ export default function CalendarView({
           </div>
         ))}
 
-        {days.map((day) => {
-          const formatted = formatDate(day);
-
+        {calendarCells.map(({ date, inCurrentMonth }) => {
+          const formatted = formatDate(date);
           const hasMeeting = meetingDates.includes(formatted);
           const hasNote = noteDates.includes(formatted);
+          const isSelected = selectedDate && isSameDay(date, new Date(`${selectedDate}T00:00:00`));
 
           return (
             <div
               key={formatted}
               onClick={() => onSelectDate(formatted)}
+              className="calendar-day-cell"
               style={{
-                padding: "0.8rem 0",
                 borderRadius: "8px",
                 cursor: "pointer",
-                background:
-                  selectedDate && isSameDay(day, new Date(selectedDate))
-                    ? "linear-gradient(135deg, #6759FF, #A79BFF)"
-                    : dayBg,
-                color:
-                  selectedDate && isSameDay(day, new Date(selectedDate))
-                    ? "#fff"
-                    : textColor,
+                background: isSelected ? "linear-gradient(135deg, #6759FF, #A79BFF)" : dayBg,
+                color: isSelected ? "#fff" : inCurrentMonth ? textColor : mutedColor,
+                opacity: inCurrentMonth ? 1 : 0.65,
                 transition: "0.2s",
               }}
             >
-              {day.getDate()}
+              {date.getDate()}
 
-              {/* Indicators */}
               <div
                 style={{
                   marginTop: "4px",
@@ -147,7 +167,7 @@ export default function CalendarView({
                       width: 7,
                       height: 7,
                       borderRadius: "50%",
-                      background: "#6759FF",
+                      background: isSelected ? "#ffffff" : "#6759FF",
                     }}
                   />
                 )}

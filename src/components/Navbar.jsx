@@ -73,11 +73,11 @@ export default function Navbar({ authenticated = false }) {
           style={{
             position: "fixed",
             top: 0,
-            right: 0,
+            left: 0,
             width: "min(360px, 100vw)",
             height: "100vh",
             background: "#fff",
-            boxShadow: "-4px 0px 15px rgba(0,0,0,0.08)",
+            boxShadow: "4px 0px 15px rgba(0,0,0,0.08)",
             zIndex: 200,
             padding: "2rem 1.5rem",
             animation: "slideIn .25s ease",
@@ -211,7 +211,7 @@ export default function Navbar({ authenticated = false }) {
       {authenticated && (
         <style>{`
           @keyframes slideIn {
-            from { transform: translateX(100%); }
+            from { transform: translateX(-100%); }
             to { transform: translateX(0); }
           }
         `}</style>
