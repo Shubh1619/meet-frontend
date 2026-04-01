@@ -1,35 +1,75 @@
-// -----------------------------
-// Base API URL from .env file
-// -----------------------------
+import {
+  getAccessToken,
+  getRefreshToken,
+  setAuthSession,
+} from "./authSession";
+
 const API_BASE = import.meta.env.VITE_API_URL;
 
-// -----------------------------
-// Helper: Build request headers
-// -----------------------------
-function buildHeaders() {
-  const token = localStorage.getItem("token");
-
+function buildHeaders(extra = {}) {
+  const token = getAccessToken();
   return {
     "Content-Type": "application/json",
-    Authorization: token ? `Bearer ${token}` : "",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
   };
+}
+
+let refreshInFlight = null;
+
+async function refreshAccessToken() {
+  if (refreshInFlight) return refreshInFlight;
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  refreshInFlight = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data?.access_token) return null;
+      setAuthSession(data.access_token, data.refresh_token || refreshToken);
+      return data.access_token;
+    } catch {
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+async function apiRequest(url, options = {}, allowRetry = true) {
+  const res = await fetch(`${API_BASE}${url}`, options);
+  if (res.status === 401 && allowRetry && getRefreshToken()) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      const retryHeaders = {
+        ...(options.headers || {}),
+        Authorization: `Bearer ${newToken}`,
+      };
+      return apiRequest(url, { ...options, headers: retryHeaders }, false);
+    }
+  }
+  return res;
 }
 
 // -----------------------------
 // GET REQUEST
 // -----------------------------
 export async function apiGet(url) {
-  const res = await fetch(API_BASE + url, {
+  const res = await apiRequest(url, {
     method: "GET",
     headers: buildHeaders(),
   });
 
-  // Auto logout on 401
-  if (res.status === 401) {
-    localStorage.clear();
-    window.location.href = "/login";
-    return;
-  }
+  if (!res) return;
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
@@ -43,18 +83,13 @@ export async function apiGet(url) {
 // POST REQUEST
 // -----------------------------
 export async function apiPost(url, body) {
-  const res = await fetch(API_BASE + url, {
+  const res = await apiRequest(url, {
     method: "POST",
     headers: buildHeaders(),
     body: JSON.stringify(body),
   });
 
-  // Auto logout on unauthorized
-  if (res.status === 401) {
-    localStorage.clear();
-    window.location.href = "/login";
-    return;
-  }
+  if (!res) return;
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
@@ -68,17 +103,13 @@ export async function apiPost(url, body) {
 // PUT REQUEST
 // -----------------------------
 export async function apiPut(url, body) {
-  const res = await fetch(API_BASE + url, {
+  const res = await apiRequest(url, {
     method: "PUT",
     headers: buildHeaders(),
     body: JSON.stringify(body),
   });
 
-  if (res.status === 401) {
-    localStorage.clear();
-    window.location.href = "/login";
-    return;
-  }
+  if (!res) return;
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
@@ -92,16 +123,12 @@ export async function apiPut(url, body) {
 // DELETE REQUEST
 // -----------------------------
 export async function apiDelete(url) {
-  const res = await fetch(API_BASE + url, {
+  const res = await apiRequest(url, {
     method: "DELETE",
     headers: buildHeaders(),
   });
 
-  if (res.status === 401) {
-    localStorage.clear();
-    window.location.href = "/login";
-    return;
-  }
+  if (!res) return;
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));

@@ -45,7 +45,7 @@ export default function ForgotPassword() {
       if (!res.ok) throw new Error(data.detail || "Failed to request password reset.");
 
       setSuccess(
-        data.message || "If your account exists, a reset link has been sent to your email."
+        data.message
       );
     } catch (err) {
       setError(err.message || "Something went wrong.");
@@ -128,7 +128,7 @@ export default function ForgotPassword() {
           />
 
           <div style={{ marginTop: "1.2rem" }}>
-            <ActionButton type="submit" style={{ width: "100%" }}>
+            <ActionButton type="submit" style={{ width: "100%" }} disabled={loading}>
               {loading ? "Sending..." : "Send Reset Link"}
             </ActionButton>
           </div>

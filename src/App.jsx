@@ -3,6 +3,8 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-
 
 import PublicNavbar from "./components/PublicNavbar";
 import AuthNavbar from "./components/AuthNavbar";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { getAccessToken } from "./authSession";
 
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -16,16 +18,10 @@ import JoinMeeting from "./pages/JoinMeeting";
 import MeetingRoom from "./pages/MeetingRoom";
 import Profile from "./pages/Profile";
 
-function ProtectedRoute({ children }) {
-  const token = localStorage.getItem("token");
-  if (!token) return <Navigate to="/login" replace />;
-  return children;
-}
-
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
-  const token = localStorage.getItem("token");
+  const token = getAccessToken();
 
   useEffect(() => {
     const hash = window.location.hash || "";

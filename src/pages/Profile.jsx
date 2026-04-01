@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useDarkMode } from "../context/DarkModeContext";
+import { clearAuthSession, getRefreshToken } from "../authSession";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -15,6 +17,9 @@ export default function Profile() {
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState("");
   const [pwdSuccess, setPwdSuccess] = useState("");
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem("token")) {
@@ -71,8 +76,18 @@ export default function Profile() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      fetch(`${import.meta.env.VITE_API_URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      }).catch(() => {});
+    }
+    clearAuthSession();
     navigate("/login");
   };
 
@@ -285,35 +300,80 @@ export default function Profile() {
             <label className="small-muted" style={{ color: mutedColor }}>
               Current Password
             </label>
-            <input
-              type="password"
-              className="input mt-1"
-              value={oldPassword}
-              onChange={(e) => setOldPassword(e.target.value)}
-              style={{ background: softBg, color: textColor, borderColor }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showOldPassword ? "text" : "password"}
+                className="input mt-1"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                style={{ background: softBg, color: textColor, borderColor, paddingRight: "45px" }}
+              />
+              <span
+                onClick={() => setShowOldPassword(!showOldPassword)}
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  cursor: "pointer",
+                  color: mutedColor,
+                }}
+              >
+                {showOldPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
 
             <label className="small-muted mt-1" style={{ color: mutedColor }}>
               New Password
             </label>
-            <input
-              type="password"
-              className="input mt-1"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              style={{ background: softBg, color: textColor, borderColor }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showNewPassword ? "text" : "password"}
+                className="input mt-1"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                style={{ background: softBg, color: textColor, borderColor, paddingRight: "45px" }}
+              />
+              <span
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  cursor: "pointer",
+                  color: mutedColor,
+                }}
+              >
+                {showNewPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
 
             <label className="small-muted mt-1" style={{ color: mutedColor }}>
               Confirm New Password
             </label>
-            <input
-              type="password"
-              className="input mt-1"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              style={{ background: softBg, color: textColor, borderColor }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                className="input mt-1"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                style={{ background: softBg, color: textColor, borderColor, paddingRight: "45px" }}
+              />
+              <span
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  cursor: "pointer",
+                  color: mutedColor,
+                }}
+              >
+                {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+              </span>
+            </div>
 
             <button
               type="submit"

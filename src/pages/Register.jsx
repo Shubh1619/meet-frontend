@@ -196,7 +196,7 @@ export default function Register() {
           </div>
 
           <div style={{ marginTop: "1.5rem" }}>
-            <ActionButton type="submit" style={{ width: "100%" }}>
+            <ActionButton type="submit" style={{ width: "100%" }} disabled={loading}>
               {loading ? "Creating..." : "Create Account"}
             </ActionButton>
           </div>

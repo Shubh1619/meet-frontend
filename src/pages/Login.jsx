@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
+import { popAuthMessage, setAuthSession } from "../authSession";
 
 export default function Login() {
   const { darkMode } = useDarkMode();
@@ -11,8 +12,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
 
   const nav = useNavigate();
+  const location = useLocation();
 
   const cardBg = darkMode ? "#16213e" : "#fff";
   const bgColor = darkMode ? "#1a1a2e" : "#F8F9FF";
@@ -24,12 +27,19 @@ export default function Login() {
     if (localStorage.getItem("token")) {
       nav("/dashboard");
     }
+    if (location.state?.message) {
+      setInfo(location.state.message);
+    } else {
+      const msg = popAuthMessage();
+      if (msg) setInfo(msg);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function submit(e) {
     e.preventDefault();
     setErr("");
+    setInfo("");
     setLoading(true);
 
     try {
@@ -57,7 +67,7 @@ export default function Login() {
       const data = await res.json();
 
       // Save JWT securely
-      localStorage.setItem("token", data.access_token);
+      setAuthSession(data.access_token, data.refresh_token || null);
 
       // Fetch user info and save to localStorage
       try {
@@ -68,7 +78,7 @@ export default function Login() {
         });
         if (userRes.ok) {
           const userData = await userRes.json();
-          localStorage.setItem("user", JSON.stringify(userData));
+          setAuthSession(data.access_token, data.refresh_token || null, userData);
         }
       } catch (e) {
         console.error("Failed to fetch user info:", e);
@@ -140,6 +150,20 @@ export default function Login() {
           Welcome Back 👋
         </h2>
 
+        {info && (
+          <div
+            style={{
+              background: "#e9fbe9",
+              color: "#1d7c35",
+              padding: "0.8rem",
+              borderRadius: 10,
+              marginBottom: "1rem",
+            }}
+          >
+            {info}
+          </div>
+        )}
+
         {err && (
           <div
             style={{
@@ -190,7 +214,7 @@ export default function Login() {
           </div>
 
           <div style={{ marginTop: "1.5rem" }}>
-            <ActionButton type="submit" style={{ width: "100%" }}>
+            <ActionButton type="submit" style={{ width: "100%" }} disabled={loading}>
               {loading ? "Logging in..." : "Login"}
             </ActionButton>
           </div>
