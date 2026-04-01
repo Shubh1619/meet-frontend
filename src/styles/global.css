@@ -65,6 +65,10 @@ button { font-family:inherit; cursor:pointer; }
   gap: 1rem;
 }
 
+.site-navbar.is-auth .site-navbar-inner {
+  justify-content: space-between;
+}
+
 .site-navbar-brand {
   display: flex;
   align-items: center;
@@ -97,6 +101,10 @@ button { font-family:inherit; cursor:pointer; }
   display: flex;
   align-items: center;
   gap: 0.85rem;
+}
+
+.site-navbar.is-auth .site-navbar-actions-auth {
+  order: -1;
 }
 
 .site-navbar-actions-user {
@@ -140,6 +148,9 @@ button { font-family:inherit; cursor:pointer; }
   align-items: center;
   gap: 0.75rem;
   background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
   color: inherit;
   padding: 0.4rem;
 }
@@ -271,6 +282,22 @@ button { font-family:inherit; cursor:pointer; }
     gap: 0.85rem;
   }
 
+  .site-navbar.is-auth .site-navbar-actions,
+  .site-navbar .site-navbar-actions-auth {
+    position: static;
+    top: auto;
+    right: auto;
+    min-width: auto;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
   .site-navbar-actions.is-open {
     display: flex;
   }
@@ -285,6 +312,15 @@ button { font-family:inherit; cursor:pointer; }
     justify-content: space-between;
     width: 100%;
     padding: 0;
+  }
+
+  .site-navbar.is-auth .auth-navbar-profile {
+    width: auto;
+    padding: 0.25rem;
+  }
+
+  .site-navbar.is-auth .auth-navbar-meta {
+    display: none;
   }
 
   .site-navbar-title {

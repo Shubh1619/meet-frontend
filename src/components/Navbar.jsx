@@ -19,7 +19,7 @@ export default function Navbar({ authenticated = false }) {
 
   return (
     <>
-      <nav className="site-navbar">
+      <nav className={`site-navbar ${authenticated ? "is-auth" : "is-public"}`}>
         <div className="site-navbar-inner">
           <div
             className="site-navbar-brand"
@@ -37,7 +37,7 @@ export default function Navbar({ authenticated = false }) {
           </div>
 
           {authenticated ? (
-            <div className="site-navbar-actions">
+            <div className="site-navbar-actions site-navbar-actions-auth">
               <button
                 type="button"
                 className="auth-navbar-profile"
@@ -213,160 +213,6 @@ export default function Navbar({ authenticated = false }) {
           @keyframes slideIn {
             from { transform: translateX(100%); }
             to { transform: translateX(0); }
-          }
-
-          /* Navbar - completely box-free */
-          .site-navbar {
-            background: transparent;
-            box-shadow: none;
-            border: none;
-            padding: 1rem 0;
-          }
-
-          .site-navbar-inner {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 1.5rem;
-          }
-
-          /* Brand - no box */
-          .site-navbar-brand {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            cursor: pointer;
-            background: transparent;
-            border: none;
-          }
-
-          .site-navbar-logo {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #6759FF, #A79BFF);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 18px;
-          }
-
-          .site-navbar-title {
-            font-weight: 600;
-            color: #1E1E2F;
-            font-size: 1rem;
-          }
-
-          /* Actions container */
-          .site-navbar-actions {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-
-          /* Profile button - no box */
-          .auth-navbar-profile {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            padding: 0.5rem;
-            border-radius: 12px;
-            transition: background 0.2s;
-          }
-
-          .auth-navbar-profile:hover {
-            background: rgba(0, 0, 0, 0.05);
-          }
-
-          .auth-navbar-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #6759FF, #A79BFF);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            font-size: 14px;
-          }
-
-          .auth-navbar-meta {
-            text-align: left;
-          }
-
-          .auth-navbar-name {
-            font-weight: 600;
-            color: #1E1E2F;
-            font-size: 0.875rem;
-          }
-
-          .auth-navbar-email {
-            font-size: 0.75rem;
-            color: #606074;
-          }
-
-          /* Mobile responsive */
-          @media (max-width: 768px) {
-            .site-navbar-inner {
-              padding: 0 1rem;
-            }
-
-            .site-navbar-title {
-              font-size: 14px;
-            }
-
-            .site-navbar-logo {
-              width: 32px;
-              height: 32px;
-              font-size: 16px;
-            }
-
-            .auth-navbar-meta {
-              display: none;
-            }
-
-            .auth-navbar-profile {
-              padding: 0.25rem;
-            }
-
-            .auth-navbar-avatar {
-              width: 36px;
-              height: 36px;
-              font-size: 13px;
-            }
-          }
-
-          /* Extra small screens */
-          @media (max-width: 480px) {
-            .site-navbar-title {
-              display: none;
-            }
-
-            .site-navbar-logo {
-              width: 36px;
-              height: 36px;
-            }
-
-            .auth-navbar-avatar {
-              width: 32px;
-              height: 32px;
-              font-size: 12px;
-            }
-          }
-
-          /* Touch device optimizations */
-          button,
-          .site-navbar-brand,
-          .auth-navbar-profile {
-            -webkit-tap-highlight-color: transparent;
           }
         `}</style>
       )}
