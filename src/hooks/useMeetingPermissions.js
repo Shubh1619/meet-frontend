@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 const DEFAULT_PERMISSIONS = {
   allow_user_ai: false,
@@ -20,24 +20,38 @@ const normalizePermissions = (permissions) => ({
   allow_user_screen_share: Boolean(permissions?.allow_user_screen_share),
 });
 
+const samePermissions = (a, b) =>
+  a.allow_user_ai === b.allow_user_ai &&
+  a.allow_user_captions === b.allow_user_captions &&
+  a.allow_guest_screen_share === b.allow_guest_screen_share &&
+  a.allow_user_screen_share === b.allow_user_screen_share;
+
 export default function useMeetingPermissions(initialRole = "guest", initialPermissions = {}) {
   const [permissionState, setPermissionState] = useState({
     role: normalizeRole(initialRole),
     permissions: normalizePermissions({ ...DEFAULT_PERMISSIONS, ...initialPermissions }),
   });
 
-  const setRole = (role) => {
-    setPermissionState((prev) => ({ ...prev, role: normalizeRole(role) }));
-  };
+  const setRole = useCallback((role) => {
+    const nextRole = normalizeRole(role);
+    setPermissionState((prev) => {
+      if (prev.role === nextRole) return prev;
+      return { ...prev, role: nextRole };
+    });
+  }, []);
 
-  const setPermissions = (permissions) => {
-    setPermissionState((prev) => ({
-      ...prev,
-      permissions: normalizePermissions({ ...prev.permissions, ...permissions }),
-    }));
-  };
+  const setPermissions = useCallback((permissions) => {
+    setPermissionState((prev) => {
+      const nextPermissions = normalizePermissions({ ...prev.permissions, ...permissions });
+      if (samePermissions(prev.permissions, nextPermissions)) return prev;
+      return {
+        ...prev,
+        permissions: nextPermissions,
+      };
+    });
+  }, []);
 
-  const applyPermissionUpdate = (payload) => {
+  const applyPermissionUpdate = useCallback((payload) => {
     if (!payload) return;
     if (payload.role) setRole(payload.role);
     if (payload.permissions) {
@@ -45,7 +59,7 @@ export default function useMeetingPermissions(initialRole = "guest", initialPerm
       return;
     }
     setPermissions(payload);
-  };
+  }, [setPermissions, setRole]);
 
   const access = useMemo(() => {
     const { role, permissions } = permissionState;
@@ -76,4 +90,3 @@ export default function useMeetingPermissions(initialRole = "guest", initialPerm
     ...access,
   };
 }
-

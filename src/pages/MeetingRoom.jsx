@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaDoorOpen, FaUsers, FaHourglassHalf, FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaDesktop, FaRecordVinyl, FaClosedCaptioning, FaComment, FaSignOutAlt } from "react-icons/fa";
+import { FaUsers, FaHourglassHalf, FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaDesktop, FaRecordVinyl, FaClosedCaptioning, FaComment, FaSignOutAlt } from "react-icons/fa";
 import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
 import RecordingModal from "./RecordingModal";
@@ -18,7 +18,6 @@ export default function MeetingRoom() {
 
   const [setupVisible, setSetupVisible] = useState(true);
   const [roomVisible, setRoomVisible] = useState(false);
-  const [roomName, setRoomName] = useState("Room Name");
   const [profileUser, setProfileUser] = useState(initialStoredUser);
   const [profileReady, setProfileReady] = useState(!isLoggedIn);
   const [meetingInfo, setMeetingInfo] = useState(null);
@@ -38,6 +37,7 @@ export default function MeetingRoom() {
   const [isMirrored] = useState(true);
 
   const [chatOpen, setChatOpen] = useState(false);
+  const [participantsSidebarOpen, setParticipantsSidebarOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState("");
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -52,6 +52,7 @@ export default function MeetingRoom() {
   const [captions, setCaptions] = useState({});
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
   const [toast, setToast] = useState("");
+  const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 767);
 
   const {
     permissionState,
@@ -81,12 +82,9 @@ export default function MeetingRoom() {
   const recordingChunksRef = useRef([]);
   const recordingStartedAtRef = useRef(null);
 
-  // Check if device is mobile
-  const isMobile = useRef(window.innerWidth <= 767);
-
   useEffect(() => {
     const handleResize = () => {
-      isMobile.current = window.innerWidth <= 767;
+      setIsMobileView(window.innerWidth <= 767);
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
@@ -176,12 +174,10 @@ export default function MeetingRoom() {
         if (ignore) return;
 
         setMeetingInfo(data);
-        setRoomName(data?.title || data?.room_id || roomId || "Meeting Room");
         setMeetingLoadError("");
       } catch (error) {
         if (!ignore) {
           console.error("Failed to load meeting info:", error);
-          setRoomName(roomId || "Meeting Room");
           setMeetingLoadError("Meeting not found or unavailable.");
         }
       } finally {
@@ -317,8 +313,8 @@ export default function MeetingRoom() {
               ...p,
               name: displayName,
               stream,
-              audioEnabled: stream.getAudioTracks()[0]?.enabled ?? true,
-              videoEnabled: stream.getVideoTracks()[0]?.enabled ?? true,
+              audioEnabled: stream.getAudioTracks()[0]?.enabled ?? false,
+              videoEnabled: stream.getVideoTracks()[0]?.enabled ?? false,
             }
             : p
         ));
@@ -329,8 +325,8 @@ export default function MeetingRoom() {
             id: "you",
             name: displayName,
             stream,
-            audioEnabled: stream.getAudioTracks()[0]?.enabled ?? true,
-            videoEnabled: stream.getVideoTracks()[0]?.enabled ?? true,
+            audioEnabled: stream.getAudioTracks()[0]?.enabled ?? false,
+            videoEnabled: stream.getVideoTracks()[0]?.enabled ?? false,
             isLocal: true,
           },
         ];
@@ -588,6 +584,7 @@ export default function MeetingRoom() {
     setRoomVisible(false);
     setSetupVisible(true);
     setParticipants([]);
+    setParticipantsSidebarOpen(false);
     setPinnedParticipantId(null);
     setIsInWaitingRoom(false);
     setUnreadChatCount(0);
@@ -651,8 +648,13 @@ export default function MeetingRoom() {
 
     pcsRef.current[remoteId] = pc;
 
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => pc.addTrack(track, localStreamRef.current));
+    const localTracks = localStreamRef.current?.getTracks?.() || [];
+    if (localTracks.length > 0) {
+      localTracks.forEach((track) => pc.addTrack(track, localStreamRef.current));
+    } else {
+      // Allow media-less users to still receive remote audio/video.
+      pc.addTransceiver("audio", { direction: "recvonly" });
+      pc.addTransceiver("video", { direction: "recvonly" });
     }
 
     pc.ontrack = (e) => {
@@ -720,8 +722,8 @@ export default function MeetingRoom() {
           name: participantName,
           session_id: sessionId,
           token: hostMode ? (localStorage.getItem("token") || "") : "",
-          audioEnabled: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? true,
-          videoEnabled: localStreamRef.current?.getVideoTracks()[0]?.enabled ?? true,
+          audioEnabled: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? false,
+          videoEnabled: localStreamRef.current?.getVideoTracks()[0]?.enabled ?? false,
         })
       );
     };
@@ -976,8 +978,6 @@ export default function MeetingRoom() {
       setWaitMessage("Waiting for host approval...");
     }
 
-    setRoomName(room);
-
     sessionStorage.setItem("room", room);
     sessionStorage.setItem("name", resolvedName);
     sessionStorage.setItem(`meeting-guest-name:${roomId}`, resolvedName);
@@ -987,7 +987,15 @@ export default function MeetingRoom() {
         sessionId = await ensureGuestSession(resolvedName);
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      } catch (mediaError) {
+        console.warn("Media unavailable. Joining without camera/microphone.", mediaError);
+        stream = new MediaStream();
+        setToast("Joined without camera/microphone access.");
+      }
+
       cameraStreamRef.current = stream;
 
       const savedMic = sessionStorage.getItem("micMuted") === "true";
@@ -997,11 +1005,13 @@ export default function MeetingRoom() {
       if (stream.getVideoTracks()[0] && savedCam) stream.getVideoTracks()[0].enabled = false;
 
       setLocalStreamHandler(stream, resolvedName);
-      monitorAudioLevel(stream, "localVideoContainer");
+      if (stream.getAudioTracks().length > 0) {
+        monitorAudioLevel(stream, "localVideoContainer");
+      }
     } catch (e) {
       hasJoinedRef.current = false;
-      console.error("Media error", e);
-      alert("Could not access camera and microphone.");
+      console.error("Join error", e);
+      alert("Could not join meeting. Please try again.");
       return;
     }
 
@@ -1022,22 +1032,6 @@ export default function MeetingRoom() {
   }, [roomId, isLoggedIn, profileReady, meetingReady, hostAccessResolved, profileUser?.name, myName, joinCall, isHostUser, hostSessionId]);
 
   // ❌ REMOVE THIS BLOCK
-  useEffect(() => {
-    if (isLoggedIn) return;
-    if (!roomId || !meetingReady || !hostAccessResolved) return;
-    if (hasJoinedRef.current) return;
-
-    const rememberedName = sessionStorage.getItem(`meeting-guest-name:${roomId}`) || myName;
-
-    if (!rememberedName || rememberedName === "Guest") return;
-
-    const timer = setTimeout(() => {
-      joinCall(roomId, rememberedName);
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [isLoggedIn, roomId, meetingReady, hostAccessResolved, myName, joinCall]);
-
   useEffect(() => {
     return () => {
       hasJoinedRef.current = false;
@@ -1186,6 +1180,20 @@ export default function MeetingRoom() {
 
   const localParticipant = participants.find((participant) => participant.id === "you");
   const waitingCount = waitingUsers.length;
+  const attendeeList = participants
+    .map((participant) => ({
+      ...participant,
+      displayName: participant.name || (participant.id === "you" ? myName : "Participant"),
+    }))
+    .sort((a, b) => {
+      if (a.id === "you") return -1;
+      if (b.id === "you") return 1;
+      return a.displayName.localeCompare(b.displayName);
+    })
+    .map((participant, index) => ({
+      ...participant,
+      serial: index + 1,
+    }));
 
   const downloadRecording = useCallback(async () => {
     if (!recordedBlobUrl) return;
@@ -1294,19 +1302,51 @@ export default function MeetingRoom() {
         {/* Header */}
         <div className="room-header">
           <div className="room-info">
-            <div className="room-pill room-name">
-              <FaDoorOpen />
-              <span>{roomName}</span>
-            </div>
-            <div className="room-pill participant-count">
+            <button
+              type="button"
+              className="participant-circle-btn"
+              onClick={() => {
+                setChatOpen(false);
+                setParticipantsSidebarOpen((prev) => !prev);
+              }}
+              aria-label="Open attendee list"
+            >
               <FaUsers />
-              <span>{participants.length} participant(s)</span>
-            </div>
-            {waitingCount > 0 && (
+              <span>{participants.length}</span>
+              {canAdminControl && waitingCount > 0 && (
+                <span className="join-request-badge">{waitingCount}</span>
+              )}
+            </button>
+            {canAdminControl && waitingCount > 0 && (
               <div className="room-pill waiting-pill">
                 <FaHourglassHalf />
                 <span>{waitingCount} waiting</span>
               </div>
+            )}
+            {isLoggedIn && !isMobileView && (
+              <button
+                type="button"
+                className="room-pill room-action-pill room-desktop-only"
+                onClick={() => generateAISummary()}
+              >
+                AI Summary
+              </button>
+            )}
+            {isLoggedIn && !isMobileView && (
+              <button
+                type="button"
+                className="room-pill room-action-pill room-desktop-only"
+                onClick={() => {
+                  if (isRecording) {
+                    stopRecording();
+                    return;
+                  }
+                  setRecordingModalMode("start");
+                  setRecordingModalOpen(true);
+                }}
+              >
+                {isRecording ? "Stop Recording" : "Record"}
+              </button>
             )}
             {isRecording && (
               <div className="room-pill recording-indicator">
@@ -1324,58 +1364,15 @@ export default function MeetingRoom() {
               <strong>New user requests waiting approval</strong>
               <span>{waitingUsers.length} pending</span>
             </div>
-            {waitingUsers.map((user) => (
-              <div key={user.client_id} className="waiting-room-row">
-                <div>
-                  <div className="waiting-user-name">{user.name || "Guest"}</div>
-                  <div className="waiting-user-subtitle">Ready to join this meet</div>
-                </div>
-                <div className="waiting-room-actions">
-                  <button className="approve-btn" onClick={() => approveGuest(user.client_id)}>Approve</button>
-                  <button className="deny-btn" onClick={() => denyGuest(user.client_id)}>Deny</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {canAdminControl && (
-          <div className="waiting-room-notification" style={{ marginTop: 12 }}>
-            <div className="waiting-room-heading">
-              <strong>Host Permission Controls</strong>
-            </div>
             <div className="waiting-room-actions">
               <button
                 className="approve-btn"
-                onClick={() => togglePermissions({ allow_user_ai: !permissionState.permissions.allow_user_ai })}
+                onClick={() => {
+                  setChatOpen(false);
+                  setParticipantsSidebarOpen(true);
+                }}
               >
-                User AI: {permissionState.permissions.allow_user_ai ? "ON" : "OFF"}
-              </button>
-              <button
-                className="approve-btn"
-                onClick={() => togglePermissions({ allow_user_captions: !permissionState.permissions.allow_user_captions })}
-              >
-                User Captions: {permissionState.permissions.allow_user_captions ? "ON" : "OFF"}
-              </button>
-              <button
-                className="approve-btn"
-                onClick={() =>
-                  togglePermissions({
-                    allow_user_screen_share: !permissionState.permissions.allow_user_screen_share,
-                  })
-                }
-              >
-                User Share: {permissionState.permissions.allow_user_screen_share ? "ON" : "OFF"}
-              </button>
-              <button
-                className="approve-btn"
-                onClick={() =>
-                  togglePermissions({
-                    allow_guest_screen_share: !permissionState.permissions.allow_guest_screen_share,
-                  })
-                }
-              >
-                Guest Share: {permissionState.permissions.allow_guest_screen_share ? "ON" : "OFF"}
+                Open Waiting List
               </button>
             </div>
           </div>
@@ -1441,7 +1438,7 @@ export default function MeetingRoom() {
                 <div key={`admin-${p.id}`} className="waiting-room-row">
                   <div>
                     <div className="waiting-user-name">{p.name || "Participant"}</div>
-                    <div className="waiting-user-subtitle">{p.id}</div>
+                    <div className="waiting-user-subtitle">Participant</div>
                   </div>
                   <div className="waiting-room-actions">
                     <button className="approve-btn" onClick={() => sendHostAction("mute_user", p.id)}>Mute</button>
@@ -1466,8 +1463,8 @@ export default function MeetingRoom() {
           onToggleCamera={() => toggleCamera()}
           onShareScreen={() => toggleScreenShare()}
           onRecord={() => {
-            if (!canAdminControl) {
-              setToast("Host only action");
+            if (!isLoggedIn) {
+              setToast("Login required");
               return;
             }
             if (isRecording) {
@@ -1488,10 +1485,11 @@ export default function MeetingRoom() {
           onChat={() => setChatOpen(!chatOpen)}
           onLeave={() => leaveMeeting()}
           canShareScreen={canScreenShare}
-          canCaptions={canUseCaptions}
-          canRecord={canAdminControl}
-          canGenerateAI={canGenerateAI}
+          canCaptions={isLoggedIn && canUseCaptions}
+          canRecord={isLoggedIn && isMobileView}
+          canGenerateAI={isLoggedIn && isMobileView}
           canAdminControl={canAdminControl}
+          mobileIconsOnly={isMobileView}
         />
 
         {/* Chat Sidebar */}
@@ -1505,6 +1503,71 @@ export default function MeetingRoom() {
           canPrivateMessage={canPrivateMessage}
         />
 
+                {participantsSidebarOpen && (
+          <>
+            <div className="participants-sidebar-backdrop" onClick={() => setParticipantsSidebarOpen(false)} />
+            <aside className="participants-sidebar" aria-label="Attendee list sidebar">
+              <div className="participants-sidebar-header">
+                <div>
+                  <h3>Attendees</h3>
+                  <p>{attendeeList.length} in meet</p>
+                </div>
+                <button
+                  type="button"
+                  className="participants-sidebar-close"
+                  onClick={() => setParticipantsSidebarOpen(false)}
+                  aria-label="Close attendee list"
+                >
+                  X
+                </button>
+              </div>
+              <div className="participants-section">
+                <div className="participants-section-title">In Meet ({attendeeList.length})</div>
+              </div>
+              <div className="participants-sidebar-list">
+                {attendeeList.map((participant) => (
+                  <div key={`attendee-${participant.id}`} className="participants-sidebar-item">
+                    <div className="participants-avatar">{participant.displayName.slice(0, 1).toUpperCase()}</div>
+                    <div className="participants-meta">
+                      <div className="participants-name">
+                        {participant.serial}. {participant.displayName}
+                        {participant.id === "you" ? " (You)" : ""}
+                      </div>
+                      <div className="participants-status">
+                        {participant.audioEnabled ? <FaMicrophone /> : <FaMicrophoneSlash />}
+                        {participant.videoEnabled ? <FaVideo /> : <FaVideoSlash />}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {canAdminControl && (
+                <div className="participants-sidebar-footer">
+                  <div className="participants-section-title">Waiting ({waitingUsers.length})</div>
+                  {waitingUsers.length === 0 && (
+                    <div className="participants-waiting-empty">No join requests pending.</div>
+                  )}
+                  {waitingUsers.length > 0 && (
+                    <div className="participants-waiting-list">
+                      {waitingUsers.map((user) => (
+                        <div key={`waiting-${user.client_id}`} className="participants-waiting-item">
+                          <div>
+                            <div className="waiting-user-name">{user.name || "Guest"}</div>
+                            <div className="waiting-user-subtitle">Requested to join</div>
+                          </div>
+                          <div className="waiting-room-actions">
+                            <button className="approve-btn" onClick={() => approveGuest(user.client_id)}>Approve</button>
+                            <button className="deny-btn" onClick={() => denyGuest(user.client_id)}>Deny</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </aside>
+          </>
+        )}
         {toast && (
           <div className="meeting-state-card" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, padding: "10px 14px" }}>
             <p style={{ margin: 0 }}>{toast}</p>
@@ -1526,3 +1589,4 @@ export default function MeetingRoom() {
 
   return null;
 }
+

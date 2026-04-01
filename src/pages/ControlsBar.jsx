@@ -9,6 +9,7 @@ import {
   FaVideo,
   FaVideoSlash,
   FaCircle,
+  FaRobot,
 } from "react-icons/fa";
 
 const ControlsBar = ({
@@ -32,6 +33,7 @@ const ControlsBar = ({
   canRecord = true,
   canGenerateAI = false,
   canAdminControl = false,
+  mobileIconsOnly = false,
 }) => {
   const controls = [
     {
@@ -79,7 +81,7 @@ const ControlsBar = ({
     {
       key: "ai-summary",
       label: "AI Summary",
-      icon: <FaCircle />,
+      icon: <FaRobot />,
       onClick: onGenerateAI,
       active: false,
       hidden: !canGenerateAI,
@@ -96,7 +98,7 @@ const ControlsBar = ({
 
   return (
     <div className="controls-dock">
-      <div className="controls-bar">
+      <div className={`controls-bar${mobileIconsOnly ? " mobile-icons-only" : ""}`}>
         {controls.filter((control) => !control.hidden).map((control) => (
           <button
             key={control.key}
@@ -107,22 +109,17 @@ const ControlsBar = ({
             title={control.disabled ? "Disabled by host" : control.label}
           >
             <span className="control-icon">{control.icon}</span>
-            <span className="control-label">{control.label}</span>
+            {!mobileIconsOnly && <span className="control-label">{control.label}</span>}
             {control.key === "chat" && unreadChatCount > 0 && (
               <span className="control-badge">{unreadChatCount > 99 ? "99+" : unreadChatCount}</span>
             )}
           </button>
         ))}
-        {canAdminControl && (
-          <span className="control-badge" style={{ marginLeft: 8 }}>
-            Host Controls Enabled
-          </span>
-        )}
         <button type="button" className="control-button control-leave" onClick={onLeave}>
           <span className="control-icon">
             <FaPhoneSlash />
           </span>
-          <span className="control-label">Leave</span>
+          {!mobileIconsOnly && <span className="control-label">Leave</span>}
         </button>
       </div>
     </div>
