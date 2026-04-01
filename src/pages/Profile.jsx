@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useDarkMode } from "../context/DarkModeContext";
 import { clearAuthSession, getRefreshToken } from "../authSession";
+import { API_BASE } from "../api";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -31,7 +32,7 @@ export default function Profile() {
     async function fetchUser() {
       try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/user`, {
+        const res = await fetch(`${API_BASE}/auth/user`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -78,7 +79,7 @@ export default function Profile() {
   const handleLogout = () => {
     const refreshToken = getRefreshToken();
     if (refreshToken) {
-      fetch(`${import.meta.env.VITE_API_URL}/auth/logout`, {
+      fetch(`${API_BASE}/auth/logout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -129,7 +130,7 @@ export default function Profile() {
     setPwdLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/change-password`, {
+      const res = await fetch(`${API_BASE}/auth/change-password`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

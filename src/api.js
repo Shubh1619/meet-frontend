@@ -4,7 +4,13 @@ import {
   setAuthSession,
 } from "./authSession";
 
-const API_BASE = import.meta.env.VITE_API_URL;
+const RAW_API_BASE = (import.meta.env.VITE_API_URL || "").trim().replace(/\/+$/, "");
+const IS_LOCAL_HOST =
+  typeof window !== "undefined" &&
+  (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+
+export const API_BASE =
+  RAW_API_BASE || (IS_LOCAL_HOST ? "http://127.0.0.1:8000" : "https://ai-meeting-assistant-zigx.onrender.com");
 
 function buildHeaders(extra = {}) {
   const token = getAccessToken();

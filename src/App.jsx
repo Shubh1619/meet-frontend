@@ -1,8 +1,7 @@
 import React, { useEffect } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 
-import PublicNavbar from "./components/PublicNavbar";
-import AuthNavbar from "./components/AuthNavbar";
+import Navbar from "./components/Navbar";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { getAccessToken } from "./authSession";
 
@@ -37,7 +36,7 @@ export default function App() {
 
   return (
     <div className="app-container">
-      {usePublicNavbar ? <PublicNavbar /> : <AuthNavbar />}
+      <Navbar authenticated={!usePublicNavbar} />
 
       <main className="main-content">
         <Routes>

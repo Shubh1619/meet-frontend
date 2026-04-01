@@ -6,6 +6,7 @@ import ChatSidebar from "./ChatSidebar";
 import RecordingModal from "./RecordingModal";
 import VideoTile from "./VideoTile";
 import useMeetingPermissions from "../hooks/useMeetingPermissions";
+import { API_BASE } from "../api";
 import "./MeetingRoom.css";
 
 export default function MeetingRoom() {
@@ -126,7 +127,7 @@ export default function MeetingRoom() {
     async function syncProfile() {
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/user`, {
+        const response = await fetch(`${API_BASE}/auth/user`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -166,7 +167,7 @@ export default function MeetingRoom() {
 
     async function loadMeetingAccess() {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/meeting/${roomId}`);
+        const response = await fetch(`${API_BASE}/meeting/${roomId}`);
         if (!response.ok) {
           throw new Error("Unable to load meeting info");
         }
@@ -251,7 +252,7 @@ export default function MeetingRoom() {
     async function createHostSession() {
       try {
         const token = localStorage.getItem("token");
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/host-session`, {
+        const response = await fetch(`${API_BASE}/auth/host-session`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -930,7 +931,7 @@ export default function MeetingRoom() {
       return cachedSessionId;
     }
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/guest/session`, {
+    const response = await fetch(`${API_BASE}/guest/session`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -1142,7 +1143,7 @@ export default function MeetingRoom() {
     if (!canAdminControl) return;
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/meeting/${roomId}/permissions`, {
+      const res = await fetch(`${API_BASE}/meeting/${roomId}/permissions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

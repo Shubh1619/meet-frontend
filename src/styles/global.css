@@ -61,7 +61,7 @@ button { font-family:inherit; cursor:pointer; }
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 1rem;
 }
 
@@ -90,6 +90,7 @@ button { font-family:inherit; cursor:pointer; }
   font-size: 1.2rem;
   font-weight: 700;
   color: #6759FF;
+  white-space: nowrap;
 }
 
 .site-navbar-actions {
@@ -115,10 +116,11 @@ button { font-family:inherit; cursor:pointer; }
   display: none;
   background: transparent;
   color: #1E1E2F;
-  border: 1px solid rgba(103, 89, 255, 0.18);
-  padding: 0.65rem;
-  min-width: 44px;
-  min-height: 44px;
+  border: none;
+  padding: 0.25rem;
+  min-width: auto;
+  min-height: auto;
+  box-shadow: none;
 }
 
 .site-navbar-toggle span {
@@ -156,6 +158,8 @@ button { font-family:inherit; cursor:pointer; }
 
 .auth-navbar-meta {
   text-align: right;
+  text-align: left;
+  flex: 1;
 }
 
 .auth-navbar-name {
@@ -283,8 +287,11 @@ button { font-family:inherit; cursor:pointer; }
     padding: 0;
   }
 
-  .auth-navbar-meta {
-    text-align: left;
-    flex: 1;
+  .site-navbar-title {
+    font-size: 1rem;
+    max-width: 45vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
+
 }

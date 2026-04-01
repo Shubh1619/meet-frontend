@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
+import { API_BASE } from "../api";
 
 export default function Register() {
   const { darkMode } = useDarkMode();
@@ -36,7 +37,7 @@ export default function Register() {
     try {
       const payload = { name, email, password: pass };
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/register`, {
+      const res = await fetch(`${API_BASE}/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

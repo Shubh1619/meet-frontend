@@ -4,6 +4,7 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
 import { popAuthMessage, setAuthSession } from "../authSession";
+import { API_BASE } from "../api";
 
 export default function Login() {
   const { darkMode } = useDarkMode();
@@ -51,7 +52,7 @@ export default function Login() {
       form.append("client_id", "string");
       form.append("client_secret", "string");
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
+      const res = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
@@ -71,7 +72,7 @@ export default function Login() {
 
       // Fetch user info and save to localStorage
       try {
-        const userRes = await fetch(`${import.meta.env.VITE_API_URL}/auth/user`, {
+        const userRes = await fetch(`${API_BASE}/auth/user`, {
           headers: {
             Authorization: `Bearer ${data.access_token}`,
           },
@@ -86,7 +87,12 @@ export default function Login() {
 
       nav("/dashboard");
     } catch (error) {
-      setErr(error.message);
+      const message = error?.message || "Login failed";
+      if (message.toLowerCase().includes("failed to fetch")) {
+        setErr(`Cannot connect to server at ${API_BASE}. Make sure backend is running.`);
+      } else {
+        setErr(message);
+      }
     }
 
     setLoading(false);

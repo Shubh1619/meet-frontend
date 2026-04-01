@@ -297,6 +297,8 @@ input:focus, textarea:focus, select:focus {
 
 .auth-navbar-meta {
   text-align: right;
+  text-align: left;
+   flex: 1;
 }
 
 .auth-navbar-name {
@@ -419,10 +421,6 @@ input:focus, textarea:focus, select:focus {
     padding: 0;
   }
 
-  .auth-navbar-meta {
-    text-align: left;
-    flex: 1;
-  }
 
   .footer {
     padding: 1.25rem 1rem;
