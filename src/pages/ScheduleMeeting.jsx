@@ -34,6 +34,15 @@ export default function ScheduleMeeting() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    document.body.classList.add("hide-route-scrollbar");
+    document.documentElement.classList.add("hide-route-scrollbar");
+    return () => {
+      document.body.classList.remove("hide-route-scrollbar");
+      document.documentElement.classList.remove("hide-route-scrollbar");
+    };
+  }, []);
+
   const [topic, setTopic] = useState("");
   const [agenda, setAgenda] = useState("");
   const [participants, setParticipants] = useState("");
@@ -84,6 +93,7 @@ export default function ScheduleMeeting() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <Box
+        className="schedule-page"
         sx={{
           minHeight: "100vh",
           backgroundColor: "background.default",

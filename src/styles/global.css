@@ -235,6 +235,30 @@ button { font-family:inherit; cursor:pointer; }
 
 .small-muted { color:var(--color-text-2); font-size:0.9rem; }
 
+/* Hide visible scrollbar only on Instant/Schedule pages while preserving scroll */
+.instant-page,
+.schedule-page {
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.instant-page::-webkit-scrollbar,
+.schedule-page::-webkit-scrollbar {
+  display: none;
+}
+
+html.hide-route-scrollbar,
+body.hide-route-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+html.hide-route-scrollbar::-webkit-scrollbar,
+body.hide-route-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Footer */
 .footer { text-align:center; padding:1rem; color:var(--color-text-2); font-size:0.85rem; }
 

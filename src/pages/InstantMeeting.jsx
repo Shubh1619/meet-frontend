@@ -48,6 +48,15 @@ export default function InstantMeeting() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    document.body.classList.add("hide-route-scrollbar");
+    document.documentElement.classList.add("hide-route-scrollbar");
+    return () => {
+      document.body.classList.remove("hide-route-scrollbar");
+      document.documentElement.classList.remove("hide-route-scrollbar");
+    };
+  }, []);
+
   const cardBg = darkMode ? "#16213e" : "#fff";
   const bgColor = darkMode ? "#1a1a2e" : "#F8F9FF";
   const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
@@ -107,6 +116,7 @@ export default function InstantMeeting() {
 
   return (
     <div
+      className="instant-page"
       style={{
         minHeight: "calc(100vh - 60px)",
         background: bgColor,
