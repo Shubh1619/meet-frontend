@@ -36,6 +36,7 @@ export default function InstantMeeting() {
   const [agenda, setAgenda] = useState("");
   const [participants, setParticipants] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
+  const [roomId, setRoomId] = useState("");
   const [loading, setLoading] = useState(false);
 
   const nav = useNavigate();
@@ -89,6 +90,7 @@ export default function InstantMeeting() {
 
       const roomId = res.room_id || res.join_link?.match(/\/meeting\/([^/]+)/)?.[1];
       setMeetingLink(normalizeJoinLink(res.join_link, roomId));
+      setRoomId(roomId || "");
       if (roomId && res.host_session_id) {
         sessionStorage.setItem(`meeting-host-session:${roomId}`, res.host_session_id);
       }
@@ -103,7 +105,33 @@ export default function InstantMeeting() {
     navigator.clipboard.writeText(meetingLink);
     alert("✅ Meeting link copied!");
   }
+  async function addParticipant() {
+    const emailInput = window.prompt("Enter participant email(s), comma separated:");
+    if (!emailInput) return;
 
+    const invitees = emailInput
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (!invitees.length) {
+      alert("Please enter at least one valid email.");
+      return;
+    }
+
+    const targetRoomId = roomId || meetingLink.match(/\/meeting\/([^/]+)/)?.[1];
+    if (!targetRoomId) {
+      alert("Meeting room not found.");
+      return;
+    }
+
+    try {
+      const res = await apiPost(`/instant/${targetRoomId}/invite`, { participants: invitees });
+      alert(res?.msg || "Invitation sent.");
+    } catch (error) {
+      alert("❌ Failed to send invitation: " + error.message);
+    }
+  }
   function joinMeeting() {
     if (!meetingLink) return;
 
@@ -274,11 +302,9 @@ export default function InstantMeeting() {
 
               <ActionButton
                 variant="ghost"
-                onClick={() => setMeetingLink("")}
+                onClick={addParticipant}
                 style={{ flex: 1, padding: "0.8rem" }}
-              >
-                New Meeting
-              </ActionButton>
+              >Add Participant</ActionButton>
             </div>
           </>
         )}
@@ -320,5 +346,6 @@ const copyBtnStyle = {
   fontWeight: 600,
   cursor: "pointer",
 };
+
 
 

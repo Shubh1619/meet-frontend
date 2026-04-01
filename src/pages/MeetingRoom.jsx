@@ -53,6 +53,10 @@ export default function MeetingRoom() {
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
   const [toast, setToast] = useState("");
   const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 767);
+  const [previewStream, setPreviewStream] = useState(null);
+  const [previewMicOn, setPreviewMicOn] = useState(false);
+  const [previewCamOn, setPreviewCamOn] = useState(false);
+  const previewVideoRef = useRef(null);
 
   const {
     permissionState,
@@ -88,6 +92,64 @@ export default function MeetingRoom() {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    if (!setupVisible || !meetingReady || !hostAccessResolved || meetingLoadError) return;
+
+    let cancelled = false;
+
+    async function setupPreview() {
+      if (cameraStreamRef.current) {
+        const existingStream = cameraStreamRef.current;
+        setPreviewStream(existingStream);
+        setPreviewMicOn(existingStream.getAudioTracks()[0]?.enabled ?? false);
+        setPreviewCamOn(existingStream.getVideoTracks()[0]?.enabled ?? false);
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        if (cancelled) return;
+        cameraStreamRef.current = stream;
+        setPreviewStream(stream);
+        setPreviewMicOn(stream.getAudioTracks()[0]?.enabled ?? false);
+        setPreviewCamOn(stream.getVideoTracks()[0]?.enabled ?? false);
+      } catch (error) {
+        if (cancelled) return;
+        console.warn("Preview media unavailable. Continuing without media.", error);
+        const fallbackStream = new MediaStream();
+        cameraStreamRef.current = fallbackStream;
+        setPreviewStream(fallbackStream);
+        setPreviewMicOn(false);
+        setPreviewCamOn(false);
+      }
+    }
+
+    setupPreview();
+    return () => {
+      cancelled = true;
+    };
+  }, [setupVisible, meetingReady, hostAccessResolved, meetingLoadError]);
+
+  useEffect(() => {
+    if (!setupVisible || !previewVideoRef.current) return;
+    if (!previewStream) return;
+    previewVideoRef.current.srcObject = previewStream;
+    previewVideoRef.current.play().catch(() => {});
+  }, [setupVisible, previewStream]);
+
+  const togglePreviewTrack = useCallback((kind) => {
+    const stream = cameraStreamRef.current;
+    if (!stream) return;
+    const track = kind === "audio" ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    if (kind === "audio") {
+      setPreviewMicOn(track.enabled);
+      return;
+    }
+    setPreviewCamOn(track.enabled);
   }, []);
 
   useEffect(() => {
@@ -540,6 +602,25 @@ export default function MeetingRoom() {
     setRecordingTimer("00:00");
   }, []);
 
+  const stopAllMediaTracks = useCallback(() => {
+    const streams = [
+      localStreamRef.current,
+      cameraStreamRef.current,
+      screenStreamRef.current,
+      recordingStreamRef.current,
+    ].filter(Boolean);
+
+    const stoppedTracks = new Set();
+    streams.forEach((stream) => {
+      stream.getTracks().forEach((track) => {
+        if (!stoppedTracks.has(track.id)) {
+          track.stop();
+          stoppedTracks.add(track.id);
+        }
+      });
+    });
+  }, []);
+
   const leaveMeeting = useCallback((shouldRedirect = true) => {
     hasJoinedRef.current = false;
 
@@ -561,21 +642,13 @@ export default function MeetingRoom() {
       wsRef.current = null;
     }
 
-    if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-      cameraStreamRef.current = null;
-    }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((track) => track.stop());
-      screenStreamRef.current = null;
-    }
+    stopAllMediaTracks();
+    cameraStreamRef.current = null;
+    screenStreamRef.current = null;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
-    if (recordingStreamRef.current) {
-      recordingStreamRef.current.getTracks().forEach((track) => track.stop());
-      recordingStreamRef.current = null;
-    }
+    recordingStreamRef.current = null;
 
     localStreamRef.current = null;
     setChatOpen(false);
@@ -583,6 +656,9 @@ export default function MeetingRoom() {
     setMsgInput("");
     setRoomVisible(false);
     setSetupVisible(true);
+    setPreviewStream(null);
+    setPreviewMicOn(false);
+    setPreviewCamOn(false);
     setParticipants([]);
     setParticipantsSidebarOpen(false);
     setPinnedParticipantId(null);
@@ -590,13 +666,17 @@ export default function MeetingRoom() {
     setUnreadChatCount(0);
 
     if (shouldRedirect) {
-      if (isHostUser) {
-        navigate("/dashboard");
-      } else {
-        navigate("/login");
-      }
+      const targetPath = isLoggedIn ? "/dashboard" : "/login";
+      navigate(targetPath, { replace: true });
+      window.setTimeout(() => {
+        if (window.location.pathname !== targetPath) {
+          window.location.assign(targetPath);
+          return;
+        }
+        window.location.reload();
+      }, 40);
     }
-  }, [isHostUser, navigate]);
+  }, [isLoggedIn, navigate, stopAllMediaTracks]);
 
   const sendChatMessage = (message) => {
     const trimmedMessage = message.trim();
@@ -967,6 +1047,7 @@ export default function MeetingRoom() {
     let sessionId = hostMode ? hostSessionId : guestSessionId;
     setMyName(resolvedName);
     setSetupVisible(false);
+    setPreviewStream(null);
 
     if (hostMode) {
       setRoomVisible(true);
@@ -987,13 +1068,15 @@ export default function MeetingRoom() {
         sessionId = await ensureGuestSession(resolvedName);
       }
 
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      } catch (mediaError) {
-        console.warn("Media unavailable. Joining without camera/microphone.", mediaError);
-        stream = new MediaStream();
-        setToast("Joined without camera/microphone access.");
+      let stream = cameraStreamRef.current;
+      if (!stream) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        } catch (mediaError) {
+          console.warn("Media unavailable. Joining without camera/microphone.", mediaError);
+          stream = new MediaStream();
+          setToast("Joined without camera/microphone.");
+        }
       }
 
       cameraStreamRef.current = stream;
@@ -1018,19 +1101,6 @@ export default function MeetingRoom() {
     connectWebSocket(room, resolvedName, hostMode, sessionId);
   }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId, guestSessionId, ensureGuestSession]);
 
-  useEffect(() => {
-    if (!isLoggedIn) return;
-
-    if (roomId && profileReady && meetingReady && hostAccessResolved) {
-      const timer = setTimeout(() => {
-        if (isHostUser && !hostSessionId) return;
-        joinCall(roomId, profileUser?.name || myName || "Guest");
-      }, 0);
-
-      return () => clearTimeout(timer);
-    }
-  }, [roomId, isLoggedIn, profileReady, meetingReady, hostAccessResolved, profileUser?.name, myName, joinCall, isHostUser, hostSessionId]);
-
   // ❌ REMOVE THIS BLOCK
   useEffect(() => {
     return () => {
@@ -1050,23 +1120,15 @@ export default function MeetingRoom() {
         wsRef.current = null;
       }
 
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-        cameraStreamRef.current = null;
-      }
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((track) => track.stop());
-        screenStreamRef.current = null;
-      }
+      stopAllMediaTracks();
+      cameraStreamRef.current = null;
+      screenStreamRef.current = null;
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
         mediaRecorderRef.current.stop();
       }
-      if (recordingStreamRef.current) {
-        recordingStreamRef.current.getTracks().forEach((track) => track.stop());
-        recordingStreamRef.current = null;
-      }
+      recordingStreamRef.current = null;
     };
-  }, []);
+  }, [stopAllMediaTracks]);
 
   useEffect(() => {
     if (chatOpen) {
@@ -1249,33 +1311,77 @@ export default function MeetingRoom() {
     );
   }
 
-  if (setupVisible && !isLoggedIn) {
+  if (setupVisible) {
+    const displayName = (isLoggedIn ? profileUser?.name : myName)?.trim() || "Guest";
+
     return (
       <div id="setup" className="meeting-room-shell">
         <div className="setup-container meeting-state-card">
           <div className="setup-header">
             <h2>Join Meeting</h2>
-            <p className="setup-subtitle">Enter your name to request access from the host.</p>
+            <p className="setup-subtitle">Preview your camera and audio before joining.</p>
           </div>
-          <input
-            type="text"
-            id="nameInput"
-            placeholder="Enter your display name"
-            value={myName}
-            onChange={(e) => setMyName(e.target.value)}
-          />
+          <div className="setup-preview-grid">
+            <div className="setup-preview-tile">
+              <video
+                ref={previewVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className={`setup-preview-video ${isMirrored ? "video-tile-video-mirrored" : ""}`}
+              />
+              {!previewCamOn && (
+                <div className="setup-preview-overlay">
+                  <FaVideoSlash />
+                  <span>Camera off</span>
+                </div>
+              )}
+              <div className="setup-preview-footer">
+                <span className="setup-preview-name">{displayName}</span>
+                <span className="setup-preview-status">
+                  {previewMicOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
+                  {previewCamOn ? <FaVideo /> : <FaVideoSlash />}
+                </span>
+              </div>
+            </div>
+          </div>
+          {!isLoggedIn && (
+            <input
+              type="text"
+              id="nameInput"
+              placeholder="Enter your display name"
+              value={myName}
+              onChange={(e) => setMyName(e.target.value)}
+            />
+          )}
+          <div className="waiting-room-actions">
+            <button
+              type="button"
+              className="approve-btn"
+              onClick={() => togglePreviewTrack("audio")}
+            >
+              {previewMicOn ? "Mic On" : "Mic Off"}
+            </button>
+            <button
+              type="button"
+              className="approve-btn"
+              onClick={() => togglePreviewTrack("video")}
+            >
+              {previewCamOn ? "Camera On" : "Camera Off"}
+            </button>
+          </div>
           <button
             id="joinBtn"
             onClick={() => {
               const trimmedName = (myName || "").trim();
-              if (!trimmedName) {
+              if (!isLoggedIn && !trimmedName) {
                 alert("Please enter your name to continue.");
                 return;
               }
-              joinCall(roomId || "default-room", trimmedName);
+              joinCall(roomId || "default-room", trimmedName || profileUser?.name || "Guest");
             }}
           >
-            Request to Join
+            {isLoggedIn ? "Join Meeting" : "Request to Join"}
           </button>
         </div>
       </div>
@@ -1301,6 +1407,10 @@ export default function MeetingRoom() {
       <div id="room" className="meeting-room-shell">
         {/* Header */}
         <div className="room-header">
+          <div className="room-brand">
+            <div className="room-brand-logo">M</div>
+            <div className="room-brand-name">Meeting Platform</div>
+          </div>
           <div className="room-info">
             <button
               type="button"
@@ -1391,7 +1501,7 @@ export default function MeetingRoom() {
                   isPinned={p.id === pinnedParticipantId}
                   isFeatured={p.id === pinnedParticipantId}
                   isMirrored={p.isLocal ? isMirrored : false}
-                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                  onTogglePin={() => setPinnedParticipantId((current) => (current === p.id ? null : p.id))}
                 />
               ))}
           </div>
@@ -1405,7 +1515,7 @@ export default function MeetingRoom() {
                   captions={captions[p.id]}
                   isPinned={false}
                   isMirrored={p.isLocal ? isMirrored : false}
-                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                  onTogglePin={() => setPinnedParticipantId((current) => (current === p.id ? null : p.id))}
                 />
               ))}
           </div>
@@ -1422,7 +1532,7 @@ export default function MeetingRoom() {
                   {...p}
                   captions={captions[p.id]}
                   isMirrored={p.isLocal ? isMirrored : false}
-                  onTogglePin={(id) => setPinnedParticipantId(pinnedParticipantId === id ? null : id)}
+                  onTogglePin={() => setPinnedParticipantId((current) => (current === p.id ? null : p.id))}
                 />
               ))}
         </div>

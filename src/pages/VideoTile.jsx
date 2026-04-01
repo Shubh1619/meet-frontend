@@ -132,7 +132,7 @@ const VideoTile = ({
           autoPlay
           playsInline
           muted={isLocal}
-          className={`video-tile-video ${isMirrored ? 'video-tile-video-mirrored' : ''}`}
+          className={`video-tile-video ${(isLocal || isMirrored) ? 'video-tile-video-mirrored' : ''}`}
           onDoubleClick={toggleFullscreen}
         />
         
