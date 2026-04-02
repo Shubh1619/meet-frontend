@@ -1730,7 +1730,7 @@ export default function MeetingRoom() {
                     {setupAvatarUrl ? (
                       <img src={setupAvatarUrl} alt={displayName} className="setup-preview-avatar-image" />
                     ) : (
-                      <span>{displayInitials}</span>
+                      <span className="setup-preview-avatar-initials">{displayInitials}</span>
                     )}
                   </div>
                   <div className="setup-preview-camera-off">
@@ -1749,13 +1749,17 @@ export default function MeetingRoom() {
             </div>
           </div>
           {!isLoggedIn && (
-            <input
-              type="text"
-              id="nameInput"
-              placeholder="Enter your display name"
-              value={myName}
-              onChange={(e) => setMyName(e.target.value)}
-            />
+            <div className="setup-name-input-wrapper">
+              <label htmlFor="nameInput" className="setup-name-label">Display Name</label>
+              <input
+                type="text"
+                id="nameInput"
+                className="setup-name-input"
+                placeholder="Enter your display name"
+                value={myName}
+                onChange={(e) => setMyName(e.target.value)}
+              />
+            </div>
           )}
           <div className="setup-controls" role="group" aria-label="Preview controls">
             <button
@@ -1777,6 +1781,7 @@ export default function MeetingRoom() {
           </div>
           <button
             id="joinBtn"
+            className="setup-join-button"
             onClick={() => {
               const trimmedName = (myName || "").trim();
               if (!isLoggedIn && !trimmedName) {

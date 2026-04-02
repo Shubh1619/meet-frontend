@@ -14,7 +14,6 @@ import VerifyEmail from "./pages/VerifyEmail";
 import Dashboard from "./pages/Dashboard";
 import ScheduleMeeting from "./pages/ScheduleMeeting";
 import InstantMeeting from "./pages/InstantMeeting";
-import JoinMeeting from "./pages/JoinMeeting";
 import MeetingRoom from "./pages/MeetingRoom";
 import Profile from "./pages/Profile";
 
@@ -84,15 +83,6 @@ export default function App() {
             element={(
               <ProtectedRoute>
                 <InstantMeeting />
-              </ProtectedRoute>
-            )}
-          />
-
-          <Route
-            path="/join"
-            element={(
-              <ProtectedRoute>
-                <JoinMeeting />
               </ProtectedRoute>
             )}
           />
