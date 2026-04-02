@@ -168,6 +168,7 @@ export default function MeetingRoom() {
   const recordingChunksRef = useRef([]);
   const recordingStartedAtRef = useRef(null);
   const remoteStreamsRef = useRef({});
+  const hostActionCooldownRef = useRef({});
 
   useEffect(() => {
     const handleResize = () => {
@@ -530,6 +531,32 @@ export default function MeetingRoom() {
       }));
     }
   }, [myName, profileAvatarUrl, profileUser?.name]);
+
+  const applyForcedLocalState = useCallback((actionType) => {
+    const stream = localStreamRef.current;
+    if (!stream) return;
+
+    if (actionType === "mute_user") {
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack && audioTrack.enabled) {
+        audioTrack.enabled = false;
+        setParticipants((prev) => prev.map((p) => (p.id === "you" ? { ...p, audioEnabled: false } : p)));
+        sendStateUpdate();
+        toast.info("Your microphone was muted by the host.");
+      }
+      return;
+    }
+
+    if (actionType === "disable_camera") {
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack && videoTrack.enabled) {
+        videoTrack.enabled = false;
+        setParticipants((prev) => prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: false } : p)));
+        sendStateUpdate();
+        toast.info("Your camera was turned off by the host.");
+      }
+    }
+  }, [sendStateUpdate, toast]);
 
   function toggleMic() {
     const stream = localStreamRef.current;
@@ -1170,6 +1197,24 @@ export default function MeetingRoom() {
             )
           );
           return;
+        case "mute_user":
+        case "disable_camera": {
+          const targetId = msg.target_client_id;
+          if (!targetId) return;
+
+          if (targetId === myId.current) {
+            applyForcedLocalState(msg.type);
+          }
+
+          setParticipants((prev) =>
+            prev.map((p) => {
+              if (p.id !== targetId) return p;
+              if (msg.type === "mute_user") return { ...p, audioEnabled: false };
+              return { ...p, videoEnabled: false };
+            })
+          );
+          return;
+        }
 
 
         case "offer": {
@@ -1268,6 +1313,15 @@ export default function MeetingRoom() {
         case "host-left-continue":
           toast.info(msg.message || "Host left. Meeting continues.");
           return;
+        case "host-transferred":
+          if (msg.host_id === myId.current) {
+            setRole("host");
+            setIsHostUser(true);
+            toast.success(msg.message || "You are now the host.");
+          } else {
+            toast.info(msg.message || "Host role transferred.");
+          }
+          return;
         case "user-left":
           if (pcsRef.current[msg.id]) {
             pcsRef.current[msg.id].close();
@@ -1299,7 +1353,7 @@ export default function MeetingRoom() {
         }
       }, 5000);
     };
-  }, [applyPermissionUpdate, captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting, setRole, upsertParticipantPresence, profileAvatarUrl, resolveWsBaseUrl, toast]);
+  }, [applyForcedLocalState, applyPermissionUpdate, captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting, setRole, upsertParticipantPresence, profileAvatarUrl, resolveWsBaseUrl, toast]);
 
   useEffect(() => {
     reconnectFnRef.current = connectWebSocket;
@@ -1481,10 +1535,39 @@ export default function MeetingRoom() {
       toast.warning("Host-only action.");
       return;
     }
+    if (!target_client_id || target_client_id === "you" || target_client_id === myId.current) {
+      if (type === "kick_user") {
+        toast.warning("Host cannot remove themselves.");
+      }
+      return;
+    }
+
+    const throttleKey = `${type}:${target_client_id}`;
+    const now = Date.now();
+    const nextAllowedAt = hostActionCooldownRef.current[throttleKey] || 0;
+    if (now < nextAllowedAt) return;
+
+    if (type === "kick_user") {
+      const targetName = participants.find((p) => p.id === target_client_id)?.name || "this participant";
+      const shouldRemove = window.confirm(`Remove ${targetName} from the meeting?`);
+      if (!shouldRemove) return;
+    }
+
+    hostActionCooldownRef.current[throttleKey] = now + 800;
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type, target_client_id }));
+      if (type === "mute_user") {
+        setParticipants((prev) => prev.map((p) => (p.id === target_client_id ? { ...p, audioEnabled: false } : p)));
+        toast.success("User muted");
+      } else if (type === "disable_camera") {
+        setParticipants((prev) => prev.map((p) => (p.id === target_client_id ? { ...p, videoEnabled: false } : p)));
+        toast.success("Camera turned off");
+      } else if (type === "kick_user") {
+        toast.success("Participant removed");
+      }
     }
-  }, [canAdminControl, isHostUser]);
+  }, [canAdminControl, isHostUser, participants, toast]);
 
   const generateAISummary = useCallback(() => {
     if (!canGenerateAI) {
@@ -1549,6 +1632,7 @@ export default function MeetingRoom() {
     .map((participant) => ({
       ...participant,
       displayName: (participant.name || (participant.id === "you" ? myName : "Guest") || "Guest").trim(),
+      isSelf: participant.id === "you" || participant.id === myId.current,
     }))
     .sort((a, b) => {
       if (a.id === "you") return -1;
@@ -1858,29 +1942,6 @@ export default function MeetingRoom() {
               ))}
         </div>
 
-        {canAdminControl && participants.filter((p) => p.id !== "you").length > 0 && (
-          <div className="waiting-room-notification" style={{ marginTop: 12 }}>
-            <div className="waiting-room-heading">
-              <strong>Participant Admin Controls</strong>
-            </div>
-            {participants
-              .filter((p) => p.id !== "you")
-              .map((p) => (
-                <div key={`admin-${p.id}`} className="waiting-room-row">
-                  <div>
-                    <div className="waiting-user-name">{p.name || "Participant"}</div>
-                    <div className="waiting-user-subtitle">Participant</div>
-                  </div>
-                  <div className="waiting-room-actions">
-                    <button className="approve-btn" onClick={() => sendHostAction("mute_user", p.id)}>Mute</button>
-                    <button className="approve-btn" onClick={() => sendHostAction("disable_camera", p.id)}>Cam Off</button>
-                    <button className="deny-btn" onClick={() => sendHostAction("kick_user", p.id)}>Kick</button>
-                  </div>
-                </div>
-              ))}
-          </div>
-        )}
-
         {/* Controls */}
         <ControlsBar
           isMicOn={localParticipant?.audioEnabled ?? true}
@@ -1958,17 +2019,55 @@ export default function MeetingRoom() {
               <div className="participants-sidebar-list">
                 {attendeeList.map((participant) => (
                   <div key={`attendee-${participant.id}`} className="participants-sidebar-item">
-                    <div className="participants-avatar">{participant.displayName.slice(0, 1).toUpperCase()}</div>
+                    <div className="participants-avatar">
+                      {participant.avatarUrl ? (
+                        <img src={participant.avatarUrl} alt={participant.displayName} className="participants-avatar-image" />
+                      ) : (
+                        participant.displayName.slice(0, 1).toUpperCase()
+                      )}
+                    </div>
                     <div className="participants-meta">
                       <div className="participants-name">
-                        {participant.serial}. {participant.displayName}
+                        {participant.displayName}
                         {participant.id === "you" ? " (You)" : ""}
+                        {participant.role === "host" ? " (Host)" : ""}
                       </div>
                       <div className="participants-status">
                         {participant.audioEnabled ? <FaMicrophone /> : <FaMicrophoneSlash />}
                         {participant.videoEnabled ? <FaVideo /> : <FaVideoSlash />}
                       </div>
                     </div>
+                    {(canAdminControl || isHostUser) && !participant.isSelf && (
+                      <div className="participants-actions" role="group" aria-label={`Host controls for ${participant.displayName}`}>
+                        <button
+                          type="button"
+                          className="participant-action-btn"
+                          onClick={() => sendHostAction("mute_user", participant.id)}
+                          title="Mute participant"
+                          aria-label={`Mute ${participant.displayName}`}
+                        >
+                          <FaMicrophoneSlash />
+                        </button>
+                        <button
+                          type="button"
+                          className="participant-action-btn"
+                          onClick={() => sendHostAction("disable_camera", participant.id)}
+                          title="Turn camera off"
+                          aria-label={`Turn off camera for ${participant.displayName}`}
+                        >
+                          <FaVideoSlash />
+                        </button>
+                        <button
+                          type="button"
+                          className="participant-action-btn participant-action-btn-danger"
+                          onClick={() => sendHostAction("kick_user", participant.id)}
+                          title="Remove participant"
+                          aria-label={`Remove ${participant.displayName}`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
