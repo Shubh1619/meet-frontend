@@ -28,6 +28,12 @@
   padding-bottom: 16px;
 }
 
+.meeting-room-shell--setup {
+  overflow-y: auto;
+  overflow-x: clip;
+  padding-bottom: calc(1.25rem + var(--safe-area-inset-bottom));
+}
+
 @media (min-width: 768px) {
   .meeting-room-shell {
     padding: 20px;
@@ -108,9 +114,9 @@
 }
 
 .setup-join-card {
-  width: min(68rem, 100%);
-  max-width: 68rem;
-  margin-top: clamp(4vh, 8vh, 10vh);
+  width: min(64rem, 100%);
+  max-width: 64rem;
+  margin: clamp(1.5rem, 4vh, 3.5rem) auto 0;
   padding: clamp(1rem, 2vw, 1.45rem);
   border-radius: 1.65rem;
   border: 1px solid rgba(148, 163, 184, 0.25);
@@ -238,7 +244,7 @@
 @media (max-width: 767px) {
   .setup-join-card {
     width: min(100%, 40rem);
-    margin-top: 4vh;
+    margin-top: 1rem;
     border-radius: 1.2rem;
   }
 

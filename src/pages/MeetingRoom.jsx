@@ -57,6 +57,7 @@ export default function MeetingRoom() {
   const [previewMicOn, setPreviewMicOn] = useState(false);
   const [previewCamOn, setPreviewCamOn] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [turnWarningShown, setTurnWarningShown] = useState(false);
   const cancelLeaveBtnRef = useRef(null);
   const previewVideoRef = useRef(null);
   const toast = useToast();
@@ -90,6 +91,12 @@ export default function MeetingRoom() {
     }
 
     return servers;
+  }, []);
+
+  const getIceTransportPolicy = useCallback(() => {
+    const raw = (import.meta.env.VITE_ICE_TRANSPORT_POLICY || "").trim().toLowerCase();
+    if (raw === "relay") return "relay";
+    return "all";
   }, []);
 
   const resolveWsBaseUrl = useCallback(() => {
@@ -848,6 +855,7 @@ export default function MeetingRoom() {
     const pc = new RTCPeerConnection({
       iceServers: buildIceServers(),
       iceCandidatePoolSize: 10,
+      iceTransportPolicy: getIceTransportPolicy(),
     });
 
     let iceRestartTimeout = null;
@@ -991,10 +999,14 @@ export default function MeetingRoom() {
         errorCode: event.errorCode,
         errorText: event.errorText,
       });
+      if (!turnWarningShown && Number(event.errorCode) === 701) {
+        setTurnWarningShown(true);
+        toast.warning("Network relay failed. Configure a working TURN server for reliable video.");
+      }
     };
 
     return pc;
-  }, [buildIceServers, myName]);
+  }, [buildIceServers, myName, getIceTransportPolicy, turnWarningShown, toast]);
 
   // --- WebSocket ---
   const connectWebSocket = useCallback((room, participantName, hostMode, sessionId = "") => {
@@ -1613,7 +1625,7 @@ export default function MeetingRoom() {
     const setupAvatarUrl = profileAvatarUrl || (typeof localStorage !== "undefined" ? localStorage.getItem("profile_avatar_data_url") || "" : "");
 
     return (
-      <div id="setup" className="meeting-room-shell meeting-room-shell--entry">
+      <div id="setup" className="meeting-room-shell meeting-room-shell--entry meeting-room-shell--setup">
         <div className="setup-container meeting-state-card setup-join-card">
           <div className="setup-header">
             <h2>Join Meeting</h2>
