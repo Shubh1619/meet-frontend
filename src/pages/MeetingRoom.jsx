@@ -794,6 +794,9 @@ export default function MeetingRoom() {
     wsRef.current = socket;
 
     socket.onopen = () => {
+      if (hostMode) {
+        setRole("host");
+      }
       const joinType = hostMode ? "host-join" : "waiting-room-request";
       socket.send(
         JSON.stringify({
@@ -838,6 +841,21 @@ export default function MeetingRoom() {
             }
             return [...prev, { client_id: msg.client_id, name: msg.name || "Guest" }];
           });
+          return;
+        case "waiting-list":
+          setWaitingUsers(
+            Array.isArray(msg.users)
+              ? msg.users.map((user) => ({
+                client_id: user.client_id,
+                name: user.name || "Guest",
+              }))
+              : []
+          );
+          return;
+        case "waiting-room-updated":
+          if (typeof msg.count === "number" && msg.count === 0) {
+            setWaitingUsers([]);
+          }
           return;
 
         case "user-joined":
@@ -1175,14 +1193,14 @@ export default function MeetingRoom() {
   };
 
   const sendHostAction = useCallback((type, target_client_id) => {
-    if (!canAdminControl) {
+    if (!(canAdminControl || isHostUser)) {
       setToast("Host only action");
       return;
     }
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type, target_client_id }));
     }
-  }, [canAdminControl]);
+  }, [canAdminControl, isHostUser]);
 
   const generateAISummary = useCallback(() => {
     if (!canGenerateAI) {
@@ -1242,6 +1260,7 @@ export default function MeetingRoom() {
 
   const localParticipant = participants.find((participant) => participant.id === "you");
   const waitingCount = waitingUsers.length;
+  const canManageWaitingRoom = canAdminControl || isHostUser;
   const attendeeList = participants
     .map((participant) => ({
       ...participant,
@@ -1423,11 +1442,11 @@ export default function MeetingRoom() {
             >
               <FaUsers />
               <span>{participants.length}</span>
-              {canAdminControl && waitingCount > 0 && (
+              {canManageWaitingRoom && waitingCount > 0 && (
                 <span className="join-request-badge">{waitingCount}</span>
               )}
             </button>
-            {canAdminControl && waitingCount > 0 && (
+            {canManageWaitingRoom && waitingCount > 0 && (
               <div className="room-pill waiting-pill">
                 <FaHourglassHalf />
                 <span>{waitingCount} waiting</span>
@@ -1468,7 +1487,7 @@ export default function MeetingRoom() {
         </div>
 
         {/* Waiting room requests (host only) */}
-        {canAdminControl && waitingUsers.length > 0 && (
+        {canManageWaitingRoom && waitingUsers.length > 0 && (
           <div className="waiting-room-notification">
             <div className="waiting-room-heading">
               <strong>New user requests waiting approval</strong>
@@ -1651,7 +1670,7 @@ export default function MeetingRoom() {
                   </div>
                 ))}
               </div>
-              {canAdminControl && (
+              {canManageWaitingRoom && (
                 <div className="participants-sidebar-footer">
                   <div className="participants-section-title">Waiting ({waitingUsers.length})</div>
                   {waitingUsers.length === 0 && (
