@@ -61,19 +61,45 @@ export default function ScheduleMeeting() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const now = dayjs();
 
-    // Combine date and time into a single dayjs object
-    // Use local timezone (no UTC conversion)
-    const combineDateTime = (dateVal, timeVal) => {
-      const combined = dayjs(dateVal.format("YYYY-MM-DD")).hour(timeVal.hour()).minute(timeVal.minute()).second(0);
-      return combined.format("YYYY-MM-DDTHH:mm:ss");
-    };
+    const combinedStart = dayjs(date)
+      .hour(dayjs(startTime).hour())
+      .minute(dayjs(startTime).minute())
+      .second(0)
+      .millisecond(0);
+
+    const combinedEnd = dayjs(date)
+      .hour(dayjs(endTime).hour())
+      .minute(dayjs(endTime).minute())
+      .second(0)
+      .millisecond(0);
+
+    if (!topic.trim() || !agenda.trim()) {
+      toast.warning("Topic and agenda are required.");
+      return;
+    }
+
+    if (!date?.isValid?.() || !startTime?.isValid?.() || !endTime?.isValid?.()) {
+      toast.warning("Please select a valid date and time.");
+      return;
+    }
+
+    if (combinedStart.isBefore(now)) {
+      toast.warning("You cannot schedule a meeting in the past.");
+      return;
+    }
+
+    if (!combinedEnd.isAfter(combinedStart)) {
+      toast.warning("End time must be after start time.");
+      return;
+    }
 
     const payload = {
-      title: topic,
-      agenda,
-      start_time: combineDateTime(date, startTime),
-      end_time: combineDateTime(date, endTime),
+      title: topic.trim(),
+      agenda: agenda.trim(),
+      start_time: combinedStart.format("YYYY-MM-DDTHH:mm:ss"),
+      end_time: combinedEnd.format("YYYY-MM-DDTHH:mm:ss"),
       participants: participants
         ? participants.split(",").map((p) => p.trim()).filter(Boolean)
         : [],
@@ -203,6 +229,7 @@ export default function ScheduleMeeting() {
                   label="Select Date"
                   value={date}
                   onChange={(v) => setDate(v)}
+                  minDate={dayjs().startOf("day")}
                   slotProps={{ textField: { fullWidth: true, size: "small" } }}
                 />
                 <TimePicker
