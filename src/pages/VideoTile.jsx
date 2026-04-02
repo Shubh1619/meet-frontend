@@ -40,6 +40,13 @@ const VideoTile = ({
     const [from, to] = palette[seed % palette.length];
     return `linear-gradient(135deg, ${from}, ${to})`;
   }, [displayName]);
+
+  const hasLiveVideoTrack = useMemo(() => {
+    const tracks = stream?.getVideoTracks?.() || [];
+    return tracks.some((track) => track.readyState === "live");
+  }, [stream]);
+
+  const shouldShowCameraOff = !hasLiveVideoTrack;
   
   // Check mobile on mount and resize
   useEffect(() => {
@@ -62,11 +69,26 @@ const VideoTile = ({
       };
       videoRef.current.onloadedmetadata = playVideo;
       playVideo();
+
+      const tracks = [
+        ...(stream.getVideoTracks?.() || []),
+        ...(stream.getAudioTracks?.() || []),
+      ];
+      tracks.forEach((track) => {
+        track.onunmute = playVideo;
+      });
     }
     return () => {
       if (videoRef.current) {
         videoRef.current.onloadedmetadata = null;
       }
+      const tracks = [
+        ...(stream?.getVideoTracks?.() || []),
+        ...(stream?.getAudioTracks?.() || []),
+      ];
+      tracks.forEach((track) => {
+        track.onunmute = null;
+      });
     };
   }, [stream]);
   
@@ -168,7 +190,7 @@ const VideoTile = ({
           onDoubleClick={toggleFullscreen}
         />
         
-        {!videoEnabled && (
+        {shouldShowCameraOff && (
           <div className="video-off-overlay">
             <div className="video-off-avatar" style={{ background: avatarGradient }}>
               {avatarUrl ? (

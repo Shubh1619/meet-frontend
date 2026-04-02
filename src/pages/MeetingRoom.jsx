@@ -61,6 +61,37 @@ export default function MeetingRoom() {
   const previewVideoRef = useRef(null);
   const toast = useToast();
 
+  const buildIceServers = useCallback(() => {
+    const envTurn = (import.meta.env.VITE_TURN_URLS || "").trim();
+    const envTurnUser = (import.meta.env.VITE_TURN_USERNAME || "").trim();
+    const envTurnCredential = (import.meta.env.VITE_TURN_CREDENTIAL || "").trim();
+
+    const servers = [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:global.stun.twilio.com:3478" },
+      {
+        urls: [
+          "turn:openrelay.metered.ca:80?transport=udp",
+          "turn:openrelay.metered.ca:80?transport=tcp",
+          "turn:openrelay.metered.ca:443?transport=tcp",
+          "turns:openrelay.metered.ca:443?transport=tcp",
+        ],
+        username: "openrelayproject",
+        credential: "openrelayproject",
+      },
+    ];
+
+    if (envTurn && envTurnUser && envTurnCredential) {
+      servers.unshift({
+        urls: envTurn.split(",").map((u) => u.trim()).filter(Boolean),
+        username: envTurnUser,
+        credential: envTurnCredential,
+      });
+    }
+
+    return servers;
+  }, []);
+
   const resolveWsBaseUrl = useCallback(() => {
     const rawWs = (import.meta.env.VITE_WS_URL || "").trim();
     const rawApiEnv = (import.meta.env.VITE_API_URL || "").trim();
@@ -815,28 +846,61 @@ export default function MeetingRoom() {
 
   const createPeerConnection = useCallback((remoteId, remoteName, audioEnabled, videoEnabled) => {
     const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-
-        {
-          urls: "turn:openrelay.metered.ca:80",
-          username: "openrelayproject",
-          credential: "openrelayproject",
-        },
-        {
-          urls: "turn:openrelay.metered.ca:443",
-          username: "openrelayproject",
-          credential: "openrelayproject",
-        }
-      ],
+      iceServers: buildIceServers(),
+      iceCandidatePoolSize: 10,
     });
+
+    let iceRestartTimeout = null;
+    const clearIceRestartTimeout = () => {
+      if (iceRestartTimeout) {
+        window.clearTimeout(iceRestartTimeout);
+        iceRestartTimeout = null;
+      }
+    };
+
+    const scheduleIceRestart = () => {
+      clearIceRestartTimeout();
+      iceRestartTimeout = window.setTimeout(async () => {
+        if (!pcsRef.current[remoteId]) return;
+        if (pc.connectionState === "connected") return;
+        if (wsRef.current?.readyState !== WebSocket.OPEN) return;
+        try {
+          console.warn("[WebRTC] ICE stuck. Restarting ICE for", remoteId);
+          const offer = await pc.createOffer({ iceRestart: true });
+          await pc.setLocalDescription(offer);
+          wsRef.current.send(JSON.stringify({
+            type: "offer",
+            sdp: offer.sdp,
+            from: myId.current,
+            to: remoteId,
+            name: myName || "Guest",
+            audioEnabled: localStreamRef.current?.getAudioTracks?.()[0]?.enabled ?? false,
+            videoEnabled: localStreamRef.current?.getVideoTracks?.()[0]?.enabled ?? false,
+          }));
+        } catch (error) {
+          console.error("[WebRTC] ICE restart failed:", error);
+        }
+      }, 12000);
+    };
 
     pc.onconnectionstatechange = () => {
       console.log("Connection:", remoteId, pc.connectionState);
+      if (pc.connectionState === "connected") {
+        clearIceRestartTimeout();
+      } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+        scheduleIceRestart();
+      }
     };
 
     pc.oniceconnectionstatechange = () => {
       console.log("ICE:", remoteId, pc.iceConnectionState);
+      if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+        clearIceRestartTimeout();
+      } else if (pc.iceConnectionState === "checking") {
+        scheduleIceRestart();
+      } else if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
+        scheduleIceRestart();
+      }
     };
 
     pcsRef.current[remoteId] = pc;
@@ -919,8 +983,18 @@ export default function MeetingRoom() {
       }
     };
 
+    pc.onicecandidateerror = (event) => {
+      console.warn("[WebRTC] ICE candidate error", {
+        remoteId,
+        address: event.address,
+        url: event.url,
+        errorCode: event.errorCode,
+        errorText: event.errorText,
+      });
+    };
+
     return pc;
-  }, []);
+  }, [buildIceServers, myName]);
 
   // --- WebSocket ---
   const connectWebSocket = useCallback((room, participantName, hostMode, sessionId = "") => {
