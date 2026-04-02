@@ -297,7 +297,7 @@
 
 .pin-active #videos {
   grid-template-columns: 1fr;
-  min-height: 70vh;
+  min-height: auto;
 }
 
 @media (max-width: 767px) {

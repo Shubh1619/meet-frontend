@@ -51,8 +51,13 @@ export default function Register() {
         throw new Error(data.detail || "Registration failed");
       }
 
-      nav("/login", {
-        state: { message: "Registration successful. Please login to continue." },
+      nav("/verify-email", {
+        state: {
+          email,
+          message:
+            data.message ||
+            "Registration successful. Enter the OTP sent to your email to verify your account.",
+        },
       });
     } catch (error) {
       setErr(error.message);

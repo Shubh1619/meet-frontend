@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import Dashboard from "./pages/Dashboard";
 import ScheduleMeeting from "./pages/ScheduleMeeting";
 import InstantMeeting from "./pages/InstantMeeting";
@@ -27,10 +28,22 @@ export default function App() {
     if (hash.startsWith("#/reset-password")) {
       const query = hash.includes("?") ? hash.slice(hash.indexOf("?")) : "";
       navigate(`/reset-password${query}`, { replace: true });
+      return;
+    }
+    if (hash.startsWith("#/verify-email")) {
+      const query = hash.includes("?") ? hash.slice(hash.indexOf("?")) : "";
+      navigate(`/verify-email${query}`, { replace: true });
     }
   }, [navigate]);
 
-  const publicRoutes = ["/", "/login", "/register", "/forgot-password", "/reset-password"];
+  const publicRoutes = [
+    "/",
+    "/login",
+    "/register",
+    "/forgot-password",
+    "/reset-password",
+    "/verify-email",
+  ];
   const isMeetingRoom = location.pathname.startsWith("/meeting/");
   const usePublicNavbar = publicRoutes.includes(location.pathname) || !token || isMeetingRoom;
 
@@ -45,6 +58,7 @@ export default function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/meeting/:roomId" element={<MeetingRoom />} />
 
           <Route

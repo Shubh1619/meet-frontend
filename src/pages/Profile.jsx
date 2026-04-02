@@ -18,6 +18,9 @@ export default function Profile() {
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState("");
   const [pwdSuccess, setPwdSuccess] = useState("");
+  const [pendingPasswordOtp, setPendingPasswordOtp] = useState(false);
+  const [passwordOtp, setPasswordOtp] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -145,7 +148,9 @@ export default function Profile() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Failed to change password.");
 
-      setPwdSuccess(data.message || "Password changed successfully.");
+      setPwdSuccess(data.message || "Password change OTP sent.");
+      setPendingPasswordOtp(true);
+      setPasswordOtp("");
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -153,6 +158,41 @@ export default function Profile() {
       setPwdError(err.message || "Something went wrong.");
     } finally {
       setPwdLoading(false);
+    }
+  };
+
+  const handleConfirmPasswordOtp = async (e) => {
+    e.preventDefault();
+    setPwdError("");
+    setPwdSuccess("");
+
+    const cleanedOtp = passwordOtp.trim();
+    if (!cleanedOtp) {
+      setPwdError("Enter the OTP sent to your email.");
+      return;
+    }
+
+    setOtpLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/auth/change-password/confirm`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ otp: cleanedOtp }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Failed to confirm password change.");
+
+      setPwdSuccess(data.message || "Password changed successfully.");
+      setPendingPasswordOtp(false);
+      setPasswordOtp("");
+    } catch (err) {
+      setPwdError(err.message || "Something went wrong.");
+    } finally {
+      setOtpLoading(false);
     }
   };
 
@@ -395,6 +435,48 @@ export default function Profile() {
               {pwdLoading ? "Updating..." : "Change Password"}
             </button>
           </form>
+
+          {pendingPasswordOtp && (
+            <form onSubmit={handleConfirmPasswordOtp} style={{ marginTop: "1rem" }}>
+              <label className="small-muted" style={{ color: mutedColor }}>
+                Email OTP
+              </label>
+              <input
+                className="input mt-1"
+                value={passwordOtp}
+                onChange={(e) => setPasswordOtp(e.target.value)}
+                placeholder="Enter 6-digit OTP"
+                inputMode="numeric"
+                maxLength={6}
+                style={{
+                  background: softBg,
+                  color: textColor,
+                  borderColor,
+                  letterSpacing: "0.3rem",
+                  textAlign: "center",
+                  fontWeight: 700,
+                }}
+              />
+              <button
+                type="submit"
+                style={{
+                  width: "100%",
+                  marginTop: "1rem",
+                  padding: "0.8rem",
+                  borderRadius: 10,
+                  border: "1px solid #6759FF",
+                  background: softBg,
+                  color: textColor,
+                  fontWeight: 600,
+                  cursor: otpLoading ? "not-allowed" : "pointer",
+                  opacity: otpLoading ? 0.75 : 1,
+                }}
+                disabled={otpLoading}
+              >
+                {otpLoading ? "Verifying..." : "Confirm OTP"}
+              </button>
+            </form>
+          )}
         </div>
 
         <div style={styles.dangerZone}>
