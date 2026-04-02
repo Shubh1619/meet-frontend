@@ -1120,8 +1120,9 @@
 }
 
 .waiting-pill {
-  color: #8a5500;
-  background: rgba(255, 243, 205, 0.96);
+  color: #1f2a44;
+  background: rgba(241, 245, 249, 0.92);
+  border: 1px solid rgba(99, 102, 241, 0.22);
 }
 
 .recording-indicator {
@@ -1154,10 +1155,10 @@
 .waiting-room-notification {
   padding: 16px 18px;
   margin-bottom: 18px;
-  border: 1px solid rgba(245, 158, 11, 0.22);
+  border: 1px solid rgba(99, 102, 241, 0.2);
   border-radius: 20px;
-  background: rgba(255, 251, 235, 0.92);
-  box-shadow: 0 18px 35px rgba(148, 84, 11, 0.08);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 35px rgba(15, 23, 42, 0.08);
 }
 
 @media (min-width: 768px) {
@@ -1180,7 +1181,7 @@
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
-  color: #7c4600;
+  color: #1f2a44;
   flex-wrap: wrap;
 }
 
@@ -1190,7 +1191,7 @@
   justify-content: space-between;
   gap: 16px;
   padding: 12px 0;
-  border-top: 1px solid rgba(245, 158, 11, 0.12);
+  border-top: 1px solid rgba(99, 102, 241, 0.12);
   flex-wrap: wrap;
 }
 
