@@ -1079,10 +1079,9 @@ export default function MeetingRoom() {
       setIsInWaitingRoom(false);
       console.log("Host auto join, using profile identity:", resolvedName);
     } else {
-      const waitingEnabled = Boolean(meetingInfo?.settings?.waiting_room_enabled);
-      setRoomVisible(!waitingEnabled);
-      setIsInWaitingRoom(waitingEnabled);
-      setWaitMessage(waitingEnabled ? "Waiting for host approval..." : "");
+      setRoomVisible(false);
+      setIsInWaitingRoom(true);
+      setWaitMessage("Waiting for host approval...");
     }
 
     sessionStorage.setItem("room", room);
@@ -1125,7 +1124,7 @@ export default function MeetingRoom() {
     }
 
     connectWebSocket(room, resolvedName, hostMode, sessionId);
-  }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId, guestSessionId, ensureGuestSession, meetingInfo?.settings?.waiting_room_enabled]);
+  }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId, guestSessionId, ensureGuestSession]);
 
   // ❌ REMOVE THIS BLOCK
   useEffect(() => {
@@ -1408,7 +1407,7 @@ export default function MeetingRoom() {
               joinCall(roomId || "default-room", trimmedName || profileUser?.name || "Guest");
             }}
           >
-            {isLoggedIn ? "Join Meeting" : "Request to Join"}
+            {isHostUser ? "Join Meeting" : "Request to Join"}
           </button>
         </div>
       </div>
