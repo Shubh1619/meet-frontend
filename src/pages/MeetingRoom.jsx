@@ -73,6 +73,13 @@ export default function MeetingRoom() {
     canAdminControl,
   } = useMeetingPermissions(isLoggedIn ? "user" : "guest");
 
+  const profileAvatarUrl = (() => {
+    const rawAvatar = profileUser?.avatar_url || profileUser?.profile_image || profileUser?.avatar || "";
+    if (!rawAvatar || typeof rawAvatar !== "string") return "";
+    if (rawAvatar.startsWith("data:")) return "";
+    return rawAvatar;
+  })();
+
   // --- Media/WebRTC ---
   const localStreamRef = useRef(null);
   const cameraStreamRef = useRef(null);
@@ -371,6 +378,7 @@ export default function MeetingRoom() {
             ? {
               ...p,
               name: displayName,
+              avatarUrl: p.avatarUrl || profileUser?.avatar_url || profileUser?.profile_image || null,
               stream,
               audioEnabled: stream.getAudioTracks()[0]?.enabled ?? false,
               videoEnabled: stream.getVideoTracks()[0]?.enabled ?? false,
@@ -383,6 +391,7 @@ export default function MeetingRoom() {
           {
             id: "you",
             name: displayName,
+            avatarUrl: profileUser?.avatar_url || profileUser?.profile_image || null,
             stream,
             audioEnabled: stream.getAudioTracks()[0]?.enabled ?? false,
             videoEnabled: stream.getVideoTracks()[0]?.enabled ?? false,
@@ -391,7 +400,42 @@ export default function MeetingRoom() {
         ];
       }
     });
-  }, [myName]);
+  }, [myName, profileUser?.avatar_url, profileUser?.profile_image]);
+
+  const upsertParticipantPresence = useCallback((participant) => {
+    if (!participant?.id || participant.id === myId.current) return;
+    setParticipants((prev) => {
+      const existing = prev.find((p) => p.id === participant.id);
+      const safeName = (participant.name || "").trim() || existing?.name || "Guest";
+      if (existing) {
+        return prev.map((p) => (
+          p.id === participant.id
+            ? {
+              ...p,
+              name: safeName,
+              audioEnabled: typeof participant.audioEnabled === "boolean" ? participant.audioEnabled : p.audioEnabled,
+              videoEnabled: typeof participant.videoEnabled === "boolean" ? participant.videoEnabled : p.videoEnabled,
+              avatarUrl: participant.avatarUrl ?? p.avatarUrl ?? null,
+              role: participant.role || p.role,
+            }
+            : p
+        ));
+      }
+
+      return [
+        ...prev,
+        {
+          id: participant.id,
+          name: safeName,
+          stream: null,
+          audioEnabled: typeof participant.audioEnabled === "boolean" ? participant.audioEnabled : false,
+          videoEnabled: typeof participant.videoEnabled === "boolean" ? participant.videoEnabled : false,
+          avatarUrl: participant.avatarUrl ?? null,
+          role: participant.role || "guest",
+        },
+      ];
+    });
+  }, []);
 
   function monitorAudioLevel(stream, id) {
     if (!id) return;
@@ -406,11 +450,13 @@ export default function MeetingRoom() {
       wsRef.current.send(JSON.stringify({
         type: "update-state",
         id: myId.current,
+        name: myName || profileUser?.name || "Guest",
         audioEnabled: stream.getAudioTracks()[0]?.enabled ?? false,
         videoEnabled: stream.getVideoTracks()[0]?.enabled ?? false,
+        avatar_url: profileAvatarUrl || undefined,
       }));
     }
-  }, []);
+  }, [myName, profileAvatarUrl, profileUser?.name]);
 
   function toggleMic() {
     const stream = localStreamRef.current;
@@ -838,6 +884,7 @@ export default function MeetingRoom() {
           token: hostMode ? (localStorage.getItem("token") || "") : "",
           audioEnabled: localStreamRef.current?.getAudioTracks()[0]?.enabled ?? false,
           videoEnabled: localStreamRef.current?.getVideoTracks()[0]?.enabled ?? false,
+          avatar_url: profileAvatarUrl || undefined,
         })
       );
     };
@@ -895,6 +942,15 @@ export default function MeetingRoom() {
             return;
           }
 
+          upsertParticipantPresence({
+            id: msg.id,
+            name: msg.name,
+            role: msg.role,
+            audioEnabled: msg.audioEnabled,
+            videoEnabled: msg.videoEnabled,
+            avatarUrl: msg.avatar_url || msg.avatarUrl || null,
+          });
+
           let pc = pcsRef.current[msg.id];
           if (!pc) {
             pc = createPeerConnection(msg.id, msg.name, msg.audioEnabled, msg.videoEnabled);
@@ -942,6 +998,13 @@ export default function MeetingRoom() {
           return;
 
         case "update-state":
+          upsertParticipantPresence({
+            id: msg.id,
+            name: msg.name,
+            audioEnabled: msg.audioEnabled,
+            videoEnabled: msg.videoEnabled,
+            avatarUrl: msg.avatar_url || msg.avatarUrl || null,
+          });
           setParticipants((prev) =>
             prev.map((p) =>
               p.id === msg.id
@@ -957,6 +1020,13 @@ export default function MeetingRoom() {
           if (!offerPc) {
             offerPc = createPeerConnection(msg.from, msg.name);
           }
+          upsertParticipantPresence({
+            id: msg.from,
+            name: msg.name,
+            audioEnabled: msg.audioEnabled,
+            videoEnabled: msg.videoEnabled,
+            avatarUrl: msg.avatar_url || msg.avatarUrl || null,
+          });
 
           await offerPc.setRemoteDescription(new RTCSessionDescription(msg));
 
@@ -983,6 +1053,13 @@ export default function MeetingRoom() {
           if (!answerPc) {
             answerPc = createPeerConnection(msg.from, msg.name, msg.audioEnabled, msg.videoEnabled);
           }
+          upsertParticipantPresence({
+            id: msg.from,
+            name: msg.name,
+            audioEnabled: msg.audioEnabled,
+            videoEnabled: msg.videoEnabled,
+            avatarUrl: msg.avatar_url || msg.avatarUrl || null,
+          });
 
           await answerPc.setRemoteDescription(new RTCSessionDescription(msg));
 
@@ -1056,7 +1133,7 @@ export default function MeetingRoom() {
         }
       }, 5000);
     };
-  }, [applyPermissionUpdate, captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting, setRole]);
+  }, [applyPermissionUpdate, captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting, setRole, upsertParticipantPresence, profileAvatarUrl]);
 
   useEffect(() => {
     reconnectFnRef.current = connectWebSocket;
@@ -1305,7 +1382,7 @@ export default function MeetingRoom() {
   const attendeeList = participants
     .map((participant) => ({
       ...participant,
-      displayName: participant.name || (participant.id === "you" ? myName : "Participant"),
+      displayName: (participant.name || (participant.id === "you" ? myName : "Guest") || "Guest").trim(),
     }))
     .sort((a, b) => {
       if (a.id === "you") return -1;

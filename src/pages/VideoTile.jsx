@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaThumbtack } from 'react-icons/fa';
 
 const VideoTile = ({
@@ -12,13 +12,34 @@ const VideoTile = ({
   connectionState,
   onTogglePin,
   isMirrored = false,
-  captions
+  captions,
+  avatarUrl
 }) => {
   const videoRef = useRef(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const timeoutRef = useRef(null);
+  const displayName = (name || "").trim() || "Guest";
+  const initials = useMemo(() => {
+    const words = displayName.split(/\s+/).filter(Boolean);
+    if (words.length >= 2) return `${words[0][0]}${words[1][0]}`.toUpperCase();
+    return displayName.slice(0, 2).toUpperCase();
+  }, [displayName]);
+
+  const avatarGradient = useMemo(() => {
+    const palette = [
+      ["#2563eb", "#60a5fa"],
+      ["#7c3aed", "#a78bfa"],
+      ["#0ea5e9", "#22d3ee"],
+      ["#16a34a", "#4ade80"],
+      ["#ea580c", "#fb923c"],
+      ["#db2777", "#f472b6"],
+    ];
+    const seed = displayName.charCodeAt(0) || 0;
+    const [from, to] = palette[seed % palette.length];
+    return `linear-gradient(135deg, ${from}, ${to})`;
+  }, [displayName]);
   
   // Check mobile on mount and resize
   useEffect(() => {
@@ -132,14 +153,23 @@ const VideoTile = ({
           autoPlay
           playsInline
           muted={isLocal}
-          className={`video-tile-video ${(isLocal || isMirrored) ? 'video-tile-video-mirrored' : ''}`}
+          className={`video-tile-video ${(isLocal || isMirrored) ? 'video-tile-video-mirrored' : ''} ${!videoEnabled ? 'is-hidden' : ''}`}
           onDoubleClick={toggleFullscreen}
         />
         
         {!videoEnabled && (
           <div className="video-off-overlay">
-            <FaVideoSlash size={isMobile ? 24 : 32} />
-            <span>Camera off</span>
+            <div className="video-off-avatar" style={{ background: avatarGradient }}>
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={displayName} className="video-off-avatar-image" />
+              ) : (
+                <span className="video-off-avatar-initials">{initials || "G"}</span>
+              )}
+            </div>
+            <div className="video-off-status">
+              <span className="video-off-icon" aria-hidden="true">{"\u{1F4F7}\u274C"}</span>
+              <span>Camera Off</span>
+            </div>
           </div>
         )}
       </div>
@@ -153,8 +183,8 @@ const VideoTile = ({
       
       {/* Footer */}
       <div className="video-tile-footer">
-        <div className="video-tile-name" title={name}>
-          {name} {isLocal && '(You)'}
+        <div className="video-tile-name" title={displayName}>
+          {displayName} {isLocal && '(You)'}
         </div>
         <div className="video-tile-status">
           {audioEnabled ? <FaMicrophone /> : <FaMicrophoneSlash />}
@@ -166,3 +196,4 @@ const VideoTile = ({
 };
 
 export default React.memo(VideoTile);
+
