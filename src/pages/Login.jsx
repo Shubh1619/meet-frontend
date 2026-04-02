@@ -7,6 +7,7 @@ import { popAuthMessage, setAuthSession } from "../authSession";
 import { API_BASE } from "../api";
 import { useToast } from "../components/ToastProvider";
 import { focusFirstInvalidField } from "../utils/formUtils";
+import AppPopup from "../components/AppPopup";
 
 export default function Login() {
   const { darkMode } = useDarkMode();
@@ -17,6 +18,11 @@ export default function Login() {
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
+  const [showOtpPopup, setShowOtpPopup] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
   const toast = useToast();
 
   const nav = useNavigate();
@@ -105,12 +111,12 @@ export default function Login() {
     } catch (error) {
       const message = error?.message || "Login failed";
       if (message.toLowerCase().includes("verify your email")) {
-        sessionStorage.setItem("pending_verification_email", email.trim().toLowerCase());
-        nav("/verify-email", {
-          state: {
-            message: "Please verify your email with OTP before logging in.",
-          },
-        });
+        const normalized = email.trim().toLowerCase();
+        sessionStorage.setItem("pending_verification_email", normalized);
+        setPendingEmail(normalized);
+        setOtp("");
+        setShowOtpPopup(true);
+        toast.warning("Email not verified. Enter OTP to continue.");
         setLoading(false);
         return;
       }
@@ -124,6 +130,60 @@ export default function Login() {
     }
 
     setLoading(false);
+  }
+
+  async function verifyOtpFromLogin() {
+    const normalized = (pendingEmail || email || "").trim().toLowerCase();
+    const code = otp.trim();
+    if (!normalized) {
+      toast.error("Email is missing for OTP verification.");
+      return;
+    }
+    if (!code) {
+      toast.warning("Please enter OTP.");
+      return;
+    }
+
+    setOtpLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalized, otp: code }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "OTP verification failed.");
+      toast.success(data.message || "Email verified. Please login.");
+      setShowOtpPopup(false);
+      setOtp("");
+    } catch (e) {
+      toast.error(e?.message || "OTP verification failed.");
+    } finally {
+      setOtpLoading(false);
+    }
+  }
+
+  async function resendOtpFromLogin() {
+    const normalized = (pendingEmail || email || "").trim().toLowerCase();
+    if (!normalized) {
+      toast.error("Email is required to resend OTP.");
+      return;
+    }
+    setResendLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify-email/request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalized }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Failed to resend OTP.");
+      toast.info(data.message || "OTP resent.");
+    } catch (e) {
+      toast.error(e?.message || "Failed to resend OTP.");
+    } finally {
+      setResendLoading(false);
+    }
   }
 
   return (
@@ -287,6 +347,35 @@ export default function Login() {
           </span>
         </p>
       </div>
+      <AppPopup
+        open={showOtpPopup}
+        title="Verify Your Email"
+        message={`Enter OTP sent to ${pendingEmail || email}.`}
+        confirmLabel={otpLoading ? "Verifying..." : "Verify OTP"}
+        cancelLabel="Close"
+        onConfirm={verifyOtpFromLogin}
+        onCancel={() => setShowOtpPopup(false)}
+        confirmVariant="primary"
+      >
+        <input
+          className="app-popup-input"
+          placeholder="Enter 6-digit OTP"
+          value={otp}
+          onChange={(e) => setOtp(e.target.value)}
+          inputMode="numeric"
+          maxLength={6}
+        />
+        <div style={{ marginTop: 10, textAlign: "right" }}>
+          <button
+            type="button"
+            className="app-popup-btn app-popup-btn-secondary"
+            onClick={resendOtpFromLogin}
+            disabled={resendLoading}
+          >
+            {resendLoading ? "Sending..." : "Resend OTP"}
+          </button>
+        </div>
+      </AppPopup>
     </div>
   );
 }
