@@ -885,7 +885,14 @@ export default function MeetingRoom() {
 
         case "waiting":
           setIsInWaitingRoom(true);
+          setRoomVisible(false);
           setWaitMessage(msg.message || "Waiting for host approval...");
+          return;
+        case "joined":
+          if (msg.role) setRole(msg.role);
+          setIsInWaitingRoom(false);
+          setRoomVisible(true);
+          setWaitMessage("");
           return;
 
         case "approved":
@@ -1072,9 +1079,10 @@ export default function MeetingRoom() {
       setIsInWaitingRoom(false);
       console.log("Host auto join, using profile identity:", resolvedName);
     } else {
-      setRoomVisible(false);
-      setIsInWaitingRoom(true);
-      setWaitMessage("Waiting for host approval...");
+      const waitingEnabled = Boolean(meetingInfo?.settings?.waiting_room_enabled);
+      setRoomVisible(!waitingEnabled);
+      setIsInWaitingRoom(waitingEnabled);
+      setWaitMessage(waitingEnabled ? "Waiting for host approval..." : "");
     }
 
     sessionStorage.setItem("room", room);
@@ -1117,7 +1125,7 @@ export default function MeetingRoom() {
     }
 
     connectWebSocket(room, resolvedName, hostMode, sessionId);
-  }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId, guestSessionId, ensureGuestSession]);
+  }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId, guestSessionId, ensureGuestSession, meetingInfo?.settings?.waiting_room_enabled]);
 
   // ❌ REMOVE THIS BLOCK
   useEffect(() => {
