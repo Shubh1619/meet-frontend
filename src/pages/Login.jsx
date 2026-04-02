@@ -88,6 +88,16 @@ export default function Login() {
       nav("/dashboard");
     } catch (error) {
       const message = error?.message || "Login failed";
+      if (message.toLowerCase().includes("verify your email")) {
+        sessionStorage.setItem("pending_verification_email", email.trim().toLowerCase());
+        nav("/verify-email", {
+          state: {
+            message: "Please verify your email with OTP before logging in.",
+          },
+        });
+        setLoading(false);
+        return;
+      }
       if (message.toLowerCase().includes("failed to fetch")) {
         setErr(`Cannot connect to server at ${API_BASE}. Make sure backend is running.`);
       } else {
