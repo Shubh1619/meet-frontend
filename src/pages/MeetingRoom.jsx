@@ -56,6 +56,7 @@ export default function MeetingRoom() {
   const [previewStream, setPreviewStream] = useState(null);
   const [previewMicOn, setPreviewMicOn] = useState(false);
   const [previewCamOn, setPreviewCamOn] = useState(false);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const previewVideoRef = useRef(null);
 
   const {
@@ -621,7 +622,7 @@ export default function MeetingRoom() {
     });
   }, []);
 
-  const leaveMeeting = useCallback((shouldRedirect = true) => {
+  const leaveMeeting = useCallback((shouldRedirect = true, hostLeaveMode = "end_all") => {
     hasJoinedRef.current = false;
 
     if (reconnectTimeoutRef.current) {
@@ -629,6 +630,9 @@ export default function MeetingRoom() {
     }
 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
+      if (isHostUser) {
+        wsRef.current.send(JSON.stringify({ type: "host-leave-mode", mode: hostLeaveMode }));
+      }
       wsRef.current.send(JSON.stringify({ type: "leave", id: myId.current }));
     }
 
@@ -664,6 +668,7 @@ export default function MeetingRoom() {
     setPinnedParticipantId(null);
     setIsInWaitingRoom(false);
     setUnreadChatCount(0);
+    setLeaveConfirmOpen(false);
 
     if (shouldRedirect) {
       const targetPath = isLoggedIn ? "/dashboard" : "/login";
@@ -676,7 +681,24 @@ export default function MeetingRoom() {
         window.location.reload();
       }, 40);
     }
-  }, [isLoggedIn, navigate, stopAllMediaTracks]);
+  }, [isHostUser, isLoggedIn, navigate, stopAllMediaTracks]);
+
+  const handleLeaveAction = useCallback(() => {
+    if (!isHostUser) {
+      leaveMeeting();
+      return;
+    }
+    setLeaveConfirmOpen(true);
+  }, [isHostUser, leaveMeeting]);
+
+  const confirmHostLeaveForAll = useCallback(() => {
+    setLeaveConfirmOpen(false);
+    leaveMeeting(true, "end_all");
+  }, [leaveMeeting]);
+
+  const cancelHostLeave = useCallback(() => {
+    setLeaveConfirmOpen(false);
+  }, []);
 
   const sendChatMessage = (message) => {
     const trimmedMessage = message.trim();
@@ -995,6 +1017,9 @@ export default function MeetingRoom() {
         case "host-left":
           alert(msg.message || "The host has left the meeting.");
           leaveMeeting();
+          return;
+        case "host-left-continue":
+          alert(msg.message || "Host left. Meeting continues.");
           return;
         case "user-left":
           if (pcsRef.current[msg.id]) {
@@ -1317,7 +1342,7 @@ export default function MeetingRoom() {
   // --- Render ---
   if ((isLoggedIn && !profileReady) || !meetingReady || !hostAccessResolved) {
     return (
-      <div className="meeting-room-shell">
+      <div className="meeting-room-shell meeting-room-shell--entry">
         <div className="meeting-state-card">
           <h2>Loading your meeting profile</h2>
           <p>Checking room access and syncing the correct host identity before joining.</p>
@@ -1328,7 +1353,7 @@ export default function MeetingRoom() {
 
   if (meetingLoadError) {
     return (
-      <div className="meeting-room-shell">
+      <div className="meeting-room-shell meeting-room-shell--entry">
         <div className="meeting-state-card">
           <h2>Meeting unavailable</h2>
           <p>{meetingLoadError}</p>
@@ -1341,7 +1366,7 @@ export default function MeetingRoom() {
     const displayName = (isLoggedIn ? profileUser?.name : myName)?.trim() || "Guest";
 
     return (
-      <div id="setup" className="meeting-room-shell">
+      <div id="setup" className="meeting-room-shell meeting-room-shell--entry">
         <div className="setup-container meeting-state-card">
           <div className="setup-header">
             <h2>Join Meeting</h2>
@@ -1416,7 +1441,7 @@ export default function MeetingRoom() {
 
   if (isInWaitingRoom) {
     return (
-      <div className="meeting-room-shell">
+      <div className="meeting-room-shell meeting-room-shell--entry">
         <div className="meeting-state-card">
           <div className="meeting-state-icon">
             <FaHourglassHalf />
@@ -1619,7 +1644,7 @@ export default function MeetingRoom() {
           }}
           onGenerateAI={() => generateAISummary()}
           onChat={() => setChatOpen(!chatOpen)}
-          onLeave={() => leaveMeeting()}
+          onLeave={() => handleLeaveAction()}
           canShareScreen={canScreenShare}
           canCaptions={isLoggedIn && canUseCaptions}
           canRecord={isLoggedIn && isMobileView}
@@ -1719,6 +1744,27 @@ export default function MeetingRoom() {
           onDownload={downloadRecording}
           onShare={shareRecording}
         />
+
+        {leaveConfirmOpen && (
+          <div className="modal-backdrop">
+            <div className="recording-modal leave-modal">
+              <h3>Leave Meeting?</h3>
+              <p className="recording-description">
+                Are you sure you want to leave the meeting?
+              </p>
+              <p className="leave-modal-note">
+                Yes- End meeting for all participants
+              </p>
+              <p className="leave-modal-note">
+                No- Stay in the meeting
+              </p>
+              <div className="recording-actions">
+                <button className="recording-cancel" onClick={cancelHostLeave}>No</button>
+                <button className="leave-confirm-btn" onClick={confirmHostLeaveForAll}>Yes</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

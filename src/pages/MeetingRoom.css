@@ -21,6 +21,13 @@
               linear-gradient(180deg, #eff4ff 0%, #f8fbff 48%, #eef3fb 100%);
 }
 
+.meeting-room-shell--entry {
+  min-height: 100dvh;
+  height: 100dvh;
+  overflow: hidden;
+  padding-bottom: 16px;
+}
+
 @media (min-width: 768px) {
   .meeting-room-shell {
     padding: 20px;
@@ -1664,6 +1671,31 @@
   transition: opacity 0.2s;
   font-weight: 600;
   min-height: 44px;
+}
+
+.leave-modal {
+  max-width: 460px;
+}
+
+.leave-modal-note {
+  margin: 6px 0 0;
+  color: #475569;
+  font-size: 0.92rem;
+}
+
+.leave-confirm-btn {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 0.72rem 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.leave-confirm-btn:hover {
+  opacity: 0.95;
 }
 
 .recording-share {
