@@ -4,6 +4,8 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
 import { API_BASE } from "../api";
+import { useToast } from "../components/ToastProvider";
+import { focusFirstInvalidField } from "../utils/formUtils";
 
 function validatePassword(value) {
   if (!value || value.length < 8) return "Password must be at least 8 characters.";
@@ -26,6 +28,8 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const toast = useToast();
 
   const cardBg = darkMode ? "#16213e" : "#fff";
   const bgColor = darkMode ? "#1a1a2e" : "#F8F9FF";
@@ -51,19 +55,25 @@ export default function ResetPassword() {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setFieldErrors({});
 
     if (!tokenFromUrl) {
       setError("Reset link is missing or invalid. Please request a new link.");
+      toast.error("Reset link is missing or invalid.");
       return;
     }
 
     if (passwordValidation) {
       setError(passwordValidation);
+      setFieldErrors({ newPassword: passwordValidation });
+      focusFirstInvalidField(e.currentTarget);
       return;
     }
 
     if (newPassword !== confirmPassword) {
       setError("Passwords do not match.");
+      setFieldErrors({ confirmPassword: "Passwords do not match." });
+      focusFirstInvalidField(e.currentTarget);
       return;
     }
 
@@ -78,6 +88,7 @@ export default function ResetPassword() {
       if (!res.ok) throw new Error(data.detail || "Password reset failed.");
 
       setSuccess(data.message || "Password reset successful. Please login.");
+      toast.success("Password reset successful.");
       setTimeout(() => nav("/login"), 1200);
     } catch (err) {
       const msg = err.message || "Something went wrong.";
@@ -90,6 +101,7 @@ export default function ResetPassword() {
       } else {
         setError(msg);
       }
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -173,7 +185,7 @@ export default function ResetPassword() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <label className="small-muted mt-1" style={{ color: mutedColor }}>
+          <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
             New Password
           </label>
           <div style={{ position: "relative" }}>
@@ -182,10 +194,11 @@ export default function ResetPassword() {
               className="input mt-1"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              data-invalid={fieldErrors.newPassword ? "true" : "false"}
               style={{
                 background: darkMode ? "#0f0f23" : "#fff",
                 color: textColor,
-                borderColor: darkMode ? "#333" : "#ddd",
+                borderColor: fieldErrors.newPassword ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
                 paddingRight: "45px",
               }}
             />
@@ -203,6 +216,7 @@ export default function ResetPassword() {
               {showNewPassword ? <FaEyeSlash /> : <FaEye />}
             </span>
           </div>
+          {fieldErrors.newPassword && <div className="field-error">{fieldErrors.newPassword}</div>}
 
           <div style={{ marginTop: "0.5rem" }}>
             <div
@@ -228,7 +242,7 @@ export default function ResetPassword() {
             </p>
           </div>
 
-          <label className="small-muted mt-1" style={{ color: mutedColor }}>
+          <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
             Confirm New Password
           </label>
           <div style={{ position: "relative" }}>
@@ -237,10 +251,11 @@ export default function ResetPassword() {
               className="input mt-1"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              data-invalid={fieldErrors.confirmPassword ? "true" : "false"}
               style={{
                 background: darkMode ? "#0f0f23" : "#fff",
                 color: textColor,
-                borderColor: darkMode ? "#333" : "#ddd",
+                borderColor: fieldErrors.confirmPassword ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
                 paddingRight: "45px",
               }}
             />
@@ -258,6 +273,7 @@ export default function ResetPassword() {
               {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
             </span>
           </div>
+          {fieldErrors.confirmPassword && <div className="field-error">{fieldErrors.confirmPassword}</div>}
 
           <div style={{ marginTop: "1.2rem" }}>
             <ActionButton type="submit" style={{ width: "100%" }} disabled={loading || !tokenFromUrl}>

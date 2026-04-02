@@ -4,6 +4,8 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
 import { API_BASE } from "../api";
+import { useToast } from "../components/ToastProvider";
+import { focusFirstInvalidField } from "../utils/formUtils";
 
 export default function Register() {
   const { darkMode } = useDarkMode();
@@ -13,6 +15,8 @@ export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const toast = useToast();
 
   const nav = useNavigate();
 
@@ -32,6 +36,18 @@ export default function Register() {
   async function submit(e) {
     e.preventDefault();
     setErr("");
+    setFieldErrors({});
+
+    const nextErrors = {};
+    if (!name.trim()) nextErrors.name = "Name is required.";
+    if (!email.trim()) nextErrors.email = "Email is required.";
+    if (!pass.trim()) nextErrors.password = "Password is required.";
+    if (Object.keys(nextErrors).length) {
+      setFieldErrors(nextErrors);
+      focusFirstInvalidField(e.currentTarget);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -59,8 +75,10 @@ export default function Register() {
             "Registration successful. Enter the OTP sent to your email to verify your account.",
         },
       });
+      toast.success("Account created. Verify your email OTP.");
     } catch (error) {
       setErr(error.message);
+      toast.error(error.message || "Registration failed.");
     }
 
     setLoading(false);
@@ -138,7 +156,7 @@ export default function Register() {
         )}
 
         <form onSubmit={submit} style={{ textAlign: "left" }}>
-          <label className="small-muted" style={{ color: mutedColor }}>
+          <label className="small-muted required-label" style={{ color: mutedColor }}>
             Name
           </label>
           <input
@@ -146,14 +164,16 @@ export default function Register() {
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            data-invalid={fieldErrors.name ? "true" : "false"}
             style={{
               background: darkMode ? "#0f0f23" : "#fff",
               color: textColor,
-              borderColor: darkMode ? "#333" : "#ddd",
+              borderColor: fieldErrors.name ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
             }}
           />
+          {fieldErrors.name && <div className="field-error">{fieldErrors.name}</div>}
 
-          <label className="small-muted mt-1" style={{ color: mutedColor }}>
+          <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
             Email
           </label>
           <input
@@ -161,14 +181,16 @@ export default function Register() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            data-invalid={fieldErrors.email ? "true" : "false"}
             style={{
               background: darkMode ? "#0f0f23" : "#fff",
               color: textColor,
-              borderColor: darkMode ? "#333" : "#ddd",
+              borderColor: fieldErrors.email ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
             }}
           />
+          {fieldErrors.email && <div className="field-error">{fieldErrors.email}</div>}
 
-          <label className="small-muted mt-1" style={{ color: mutedColor }}>
+          <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
             Password
           </label>
           <div style={{ position: "relative" }}>
@@ -178,10 +200,11 @@ export default function Register() {
               value={pass}
               onChange={(e) => setPass(e.target.value)}
               required
+              data-invalid={fieldErrors.password ? "true" : "false"}
               style={{
                 background: darkMode ? "#0f0f23" : "#fff",
                 color: textColor,
-                borderColor: darkMode ? "#333" : "#ddd",
+                borderColor: fieldErrors.password ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
                 width: "100%",
                 paddingRight: "45px",
               }}
@@ -200,6 +223,7 @@ export default function Register() {
               {showPassword ? <FaEyeSlash /> : <FaEye />}
             </span>
           </div>
+          {fieldErrors.password && <div className="field-error">{fieldErrors.password}</div>}
 
           <div style={{ marginTop: "1.5rem" }}>
             <ActionButton type="submit" style={{ width: "100%" }} disabled={loading}>

@@ -3,6 +3,9 @@ import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { apiPost } from "../api";
 import { useDarkMode } from "../context/DarkModeContext";
+import { useToast } from "../components/ToastProvider";
+import { focusFirstInvalidField } from "../utils/formUtils";
+import AppPopup from "../components/AppPopup";
 
 const PUBLIC_MEETING_BASE = (import.meta.env.VITE_PUBLIC_APP_URL || "https://meet-frontend-4op.pages.dev")
   .trim()
@@ -38,6 +41,10 @@ export default function InstantMeeting() {
   const [meetingLink, setMeetingLink] = useState("");
   const [roomId, setRoomId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [showInvitePopup, setShowInvitePopup] = useState(false);
+  const [inviteInput, setInviteInput] = useState("");
+  const toast = useToast();
 
   const nav = useNavigate();
 
@@ -67,6 +74,15 @@ export default function InstantMeeting() {
 
   async function createInstant(e) {
     e.preventDefault();
+    setFieldErrors({});
+    const nextErrors = {};
+    if (!title.trim()) nextErrors.title = "Title is required.";
+    if (!agenda.trim()) nextErrors.agenda = "Agenda is required.";
+    if (Object.keys(nextErrors).length) {
+      setFieldErrors(nextErrors);
+      focusFirstInvalidField(e.currentTarget);
+      return;
+    }
     setLoading(true);
 
     const payload = {
@@ -95,7 +111,7 @@ export default function InstantMeeting() {
         sessionStorage.setItem(`meeting-host-session:${roomId}`, res.host_session_id);
       }
     } catch (err) {
-      alert("❌ Error: " + err.message);
+      toast.error(err.message || "Unable to create instant meeting.");
     }
 
     setLoading(false);
@@ -103,33 +119,32 @@ export default function InstantMeeting() {
 
   function copyToClipboard() {
     navigator.clipboard.writeText(meetingLink);
-    alert("✅ Meeting link copied!");
+    toast.success("Meeting link copied.");
   }
   async function addParticipant() {
-    const emailInput = window.prompt("Enter participant email(s), comma separated:");
-    if (!emailInput) return;
-
-    const invitees = emailInput
+    const invitees = inviteInput
       .split(",")
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean);
 
     if (!invitees.length) {
-      alert("Please enter at least one valid email.");
+      toast.warning("Please enter at least one valid email.");
       return;
     }
 
     const targetRoomId = roomId || meetingLink.match(/\/meeting\/([^/]+)/)?.[1];
     if (!targetRoomId) {
-      alert("Meeting room not found.");
+      toast.error("Meeting room not found.");
       return;
     }
 
     try {
       const res = await apiPost(`/instant/${targetRoomId}/invite`, { participants: invitees });
-      alert(res?.msg || "Invitation sent.");
+      toast.success(res?.msg || "Invitation sent.");
+      setShowInvitePopup(false);
+      setInviteInput("");
     } catch (error) {
-      alert("❌ Failed to send invitation: " + error.message);
+      toast.error(error.message || "Failed to send invitation.");
     }
   }
   function joinMeeting() {
@@ -211,25 +226,28 @@ export default function InstantMeeting() {
 
             <form onSubmit={createInstant} style={{ textAlign: "left" }}>
               {/* Title */}
-              <label style={{ fontSize: "0.9rem", color: mutedColor }}>
+              <label className="required-label" style={{ fontSize: "0.9rem", color: mutedColor }}>
                 Title
               </label>
               <input
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                data-invalid={fieldErrors.title ? "true" : "false"}
                 placeholder="e.g. Team Sync"
-                style={{ ...inputStyle, background: inputBg, color: textColor, borderColor }}
+                style={{ ...inputStyle, background: inputBg, color: textColor, borderColor: fieldErrors.title ? "#dc2626" : borderColor }}
                 required
               />
+              {fieldErrors.title && <div className="field-error">{fieldErrors.title}</div>}
 
               {/* Agenda */}
-              <label style={{ fontSize: "0.9rem", color: mutedColor }}>
+              <label className="required-label" style={{ fontSize: "0.9rem", color: mutedColor }}>
                 Agenda
               </label>
               <textarea
                 value={agenda}
                 onChange={(e) => setAgenda(e.target.value)}
+                data-invalid={fieldErrors.agenda ? "true" : "false"}
                 placeholder="Describe meeting agenda..."
                 style={{
                   ...inputStyle,
@@ -237,10 +255,11 @@ export default function InstantMeeting() {
                   resize: "none",
                   background: inputBg,
                   color: textColor,
-                  borderColor,
+                  borderColor: fieldErrors.agenda ? "#dc2626" : borderColor,
                 }}
                 required
               ></textarea>
+              {fieldErrors.agenda && <div className="field-error">{fieldErrors.agenda}</div>}
 
               {/* Participants (Optional) */}
               <label style={{ fontSize: "0.9rem", color: mutedColor }}>
@@ -302,13 +321,34 @@ export default function InstantMeeting() {
 
               <ActionButton
                 variant="ghost"
-                onClick={addParticipant}
+                onClick={() => setShowInvitePopup(true)}
                 style={{ flex: 1, padding: "0.8rem" }}
               >Add Participant</ActionButton>
             </div>
           </>
         )}
       </div>
+
+      <AppPopup
+        open={showInvitePopup}
+        title="Invite Participants"
+        message="Add email addresses separated by commas."
+        confirmLabel="Send Invite"
+        cancelLabel="Cancel"
+        confirmVariant="primary"
+        onConfirm={addParticipant}
+        onCancel={() => {
+          setShowInvitePopup(false);
+          setInviteInput("");
+        }}
+      >
+        <input
+          className="app-popup-input"
+          placeholder="name1@email.com, name2@email.com"
+          value={inviteInput}
+          onChange={(e) => setInviteInput(e.target.value)}
+        />
+      </AppPopup>
     </div>
   );
 }

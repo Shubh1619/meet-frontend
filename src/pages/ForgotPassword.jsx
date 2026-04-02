@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
 import { API_BASE } from "../api";
+import { useToast } from "../components/ToastProvider";
+import { focusFirstInvalidField } from "../utils/formUtils";
 
 export default function ForgotPassword() {
   const { darkMode } = useDarkMode();
@@ -11,6 +13,8 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [fieldError, setFieldError] = useState("");
+  const toast = useToast();
 
   const cardBg = darkMode ? "#16213e" : "#fff";
   const bgColor = darkMode ? "#1a1a2e" : "#F8F9FF";
@@ -21,16 +25,21 @@ export default function ForgotPassword() {
     e.preventDefault();
     setError("");
     setSuccess("");
+    setFieldError("");
 
     const cleaned = email.trim().toLowerCase();
     if (!cleaned) {
       setError("Email is required.");
+      setFieldError("Email is required.");
+      focusFirstInvalidField(e.currentTarget);
       return;
     }
 
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailPattern.test(cleaned)) {
       setError("Please enter a valid email address.");
+      setFieldError("Please enter a valid email address.");
+      focusFirstInvalidField(e.currentTarget);
       return;
     }
 
@@ -48,8 +57,10 @@ export default function ForgotPassword() {
       setSuccess(
         data.message
       );
+      toast.success("Reset link request submitted.");
     } catch (err) {
       setError(err.message || "Something went wrong.");
+      toast.error(err.message || "Failed to request reset link.");
     } finally {
       setLoading(false);
     }
@@ -113,7 +124,7 @@ export default function ForgotPassword() {
         )}
 
         <form onSubmit={handleSubmit}>
-          <label className="small-muted" style={{ color: mutedColor }}>
+          <label className="small-muted required-label" style={{ color: mutedColor }}>
             Email
           </label>
           <input
@@ -121,12 +132,14 @@ export default function ForgotPassword() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
+            data-invalid={fieldError ? "true" : "false"}
             style={{
               background: darkMode ? "#0f0f23" : "#fff",
               color: textColor,
-              borderColor: darkMode ? "#333" : "#ddd",
+              borderColor: fieldError ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
             }}
           />
+          {fieldError && <div className="field-error">{fieldError}</div>}
 
           <div style={{ marginTop: "1.2rem" }}>
             <ActionButton type="submit" style={{ width: "100%" }} disabled={loading}>

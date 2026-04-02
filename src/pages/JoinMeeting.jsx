@@ -1,17 +1,19 @@
 import React, {useState} from "react";
 import { useNavigate } from "react-router-dom";
 import { useDarkMode } from "../context/DarkModeContext";
+import { useToast } from "../components/ToastProvider";
 
 export default function JoinMeeting(){
   const { darkMode } = useDarkMode();
   const [room, setRoom] = useState("");
   const nav = useNavigate();
+  const toast = useToast();
 
   const cardBg = darkMode ? "#16213e" : "#fff";
   const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
 
   function join(){
-    if (!room) return alert("Enter a room id");
+    if (!room) return toast.warning("Please enter a room ID or meeting link.");
     
     // Extract room ID from full URL or just room ID
     let roomId = room;
@@ -21,7 +23,7 @@ export default function JoinMeeting(){
       roomId = room.split("/meeting/")[1]?.split("?")[0]?.split("/")[0];
     }
     
-    if (!roomId) return alert("Invalid room ID");
+    if (!roomId) return toast.error("Please enter a valid meeting room ID.");
     
     nav(`/meeting/${roomId}`);
   }

@@ -13,6 +13,7 @@ import dayjs from "dayjs";
 import { useLocation, useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { apiPost } from "../api";
+import { useToast } from "../components/ToastProvider";
 
 const theme = createTheme({
   palette: {
@@ -26,6 +27,7 @@ const theme = createTheme({
 export default function ScheduleMeeting() {
   const navigate = useNavigate();
   const location = useLocation();
+  const toast = useToast();
 
   const preselectedDate = location.state?.selectedDate;
   const initialDate = preselectedDate && dayjs(preselectedDate).isValid()
@@ -86,11 +88,11 @@ export default function ScheduleMeeting() {
 
     try {
       const res = await apiPost("/schedule", payload);
-      alert("✅ Meeting scheduled successfully!");
+      toast.success("Meeting scheduled successfully.");
       console.log("📅 Backend response:", res);
       navigate("/dashboard");
     } catch (err) {
-      alert("❌ Failed to schedule meeting");
+      toast.error("Failed to schedule meeting.");
       console.error(err);
     }
   };
@@ -158,7 +160,7 @@ export default function ScheduleMeeting() {
 
           <form onSubmit={handleSubmit}>
             {/* Topic */}
-            <label className="small-muted">Topic</label>
+            <label className="small-muted required-label">Topic</label>
             <TextField
               fullWidth
               size="small"
@@ -170,7 +172,7 @@ export default function ScheduleMeeting() {
             />
 
             {/* Agenda */}
-            <label className="small-muted">Agenda</label>
+            <label className="small-muted required-label">Agenda</label>
             <TextField
               fullWidth
               size="small"

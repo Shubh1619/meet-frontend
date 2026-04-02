@@ -235,6 +235,281 @@ button { font-family:inherit; cursor:pointer; }
 
 .small-muted { color:var(--color-text-2); font-size:0.9rem; }
 
+.required-label::after {
+  content: " *";
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.input.input-invalid,
+textarea.input-invalid,
+select.input-invalid {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
+.field-error {
+  margin-top: 6px;
+  color: #b91c1c;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.app-toast-stack {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 5000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(360px, calc(100vw - 24px));
+}
+
+.app-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.95));
+  border-radius: 16px;
+  padding: 12px 12px 12px 10px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-left: 4px solid #3b82f6;
+  backdrop-filter: blur(8px);
+  animation: toast-in 260ms cubic-bezier(.2,.85,.25,1);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.app-toast:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+}
+
+.app-toast--success {
+  border-left-color: #16a34a;
+  background: linear-gradient(145deg, rgba(240, 253, 244, 0.96), rgba(255, 255, 255, 0.95));
+}
+.app-toast--error {
+  border-left-color: #dc2626;
+  background: linear-gradient(145deg, rgba(254, 242, 242, 0.96), rgba(255, 255, 255, 0.95));
+}
+.app-toast--warning {
+  border-left-color: #f59e0b;
+  background: linear-gradient(145deg, rgba(255, 251, 235, 0.96), rgba(255, 255, 255, 0.95));
+}
+.app-toast--info {
+  border-left-color: #2563eb;
+  background: linear-gradient(145deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.95));
+}
+
+.app-toast-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  background: rgba(148, 163, 184, 0.16);
+}
+.app-toast--success .app-toast-icon-wrap { background: rgba(22, 163, 74, 0.14); }
+.app-toast--error .app-toast-icon-wrap { background: rgba(220, 38, 38, 0.14); }
+.app-toast--warning .app-toast-icon-wrap { background: rgba(245, 158, 11, 0.18); }
+.app-toast--info .app-toast-icon-wrap { background: rgba(37, 99, 235, 0.14); }
+
+.app-toast-icon {
+  font-size: 0.96rem;
+  line-height: 1.2;
+}
+
+.app-toast-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.app-toast-message {
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.app-toast-content {
+  flex: 1;
+}
+
+.app-toast-progress-track {
+  margin-top: 8px;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.app-toast-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  transition: width 140ms linear;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+}
+.app-toast--success .app-toast-progress-fill { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.app-toast--error .app-toast-progress-fill { background: linear-gradient(90deg, #dc2626, #fb7185); }
+.app-toast--warning .app-toast-progress-fill { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+.app-toast-close {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 1.15rem;
+  line-height: 1;
+  padding: 2px;
+  min-height: auto;
+  min-width: auto;
+  margin-top: -2px;
+}
+
+.app-toast-close:hover {
+  color: #0f172a;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) translateX(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateX(0);
+  }
+}
+
+@media (max-width: 767px) {
+  .app-toast-stack {
+    right: 50%;
+    transform: translateX(50%);
+    top: 12px;
+  }
+}
+
+.app-popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5200;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(5px);
+  animation: popup-fade-in 190ms ease-out;
+}
+
+.app-popup-card {
+  position: relative;
+  width: min(460px, calc(100vw - 24px));
+  border-radius: 18px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.98), rgba(247, 250, 255, 0.96));
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.24);
+  padding: 18px 18px 16px;
+  animation: popup-scale-in 220ms cubic-bezier(.2,.85,.25,1);
+}
+
+.app-popup-glow {
+  position: absolute;
+  top: -35px;
+  left: 18px;
+  width: 140px;
+  height: 70px;
+  background: radial-gradient(circle, rgba(103, 89, 255, 0.28), rgba(103, 89, 255, 0));
+  pointer-events: none;
+}
+
+.app-popup-title {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.app-popup-message {
+  margin: 0;
+  color: #475569;
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.app-popup-body {
+  margin-top: 12px;
+}
+
+.app-popup-actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.app-popup-btn {
+  min-height: 42px;
+  border: none;
+  border-radius: 12px;
+  padding: 0.66rem 1rem;
+  font-weight: 700;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.app-popup-btn:hover { transform: translateY(-1px); }
+.app-popup-btn:active { transform: translateY(0); }
+
+.app-popup-btn-secondary {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+.app-popup-btn-primary {
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+}
+
+.app-popup-btn-danger {
+  color: #fff;
+  background: linear-gradient(135deg, #dc2626, #f43f5e);
+}
+
+.app-popup-input {
+  width: 100%;
+  margin-top: 6px;
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  background: #fff;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.92rem;
+  color: #0f172a;
+}
+
+.app-popup-input:focus {
+  outline: 2px solid rgba(59, 130, 246, 0.24);
+  border-color: #60a5fa;
+}
+
+@keyframes popup-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes popup-scale-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Hide visible scrollbar only on Instant/Schedule pages while preserving scroll */
 .instant-page,
 .schedule-page {

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import AppPopup from "./AppPopup";
 
 function isMeaningfulNote(value) {
   const text = (value || "").trim();
@@ -10,6 +11,7 @@ export default function NoteItem({ note, index, onSave, onDelete }) {
   const [draft, setDraft] = useState(note.note_text || note.content || "");
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showDeletePopup, setShowDeletePopup] = useState(false);
 
   const isValid = useMemo(() => isMeaningfulNote(draft), [draft]);
 
@@ -32,9 +34,8 @@ export default function NoteItem({ note, index, onSave, onDelete }) {
   };
 
   const handleDelete = async () => {
-    const confirmed = window.confirm("Delete this note?");
-    if (!confirmed) return;
     await onDelete(note.id);
+    setShowDeletePopup(false);
   };
 
   const handleCancel = () => {
@@ -82,10 +83,21 @@ export default function NoteItem({ note, index, onSave, onDelete }) {
           </>
         )}
 
-        <button type="button" className="btn-note btn-note-delete" onClick={handleDelete}>
+        <button type="button" className="btn-note btn-note-delete" onClick={() => setShowDeletePopup(true)}>
           Delete
         </button>
       </div>
+
+      <AppPopup
+        open={showDeletePopup}
+        title="Delete Note?"
+        message="This note will be removed and cannot be recovered."
+        confirmLabel="Yes, Delete"
+        cancelLabel="Cancel"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeletePopup(false)}
+        confirmVariant="danger"
+      />
     </div>
   );
 }

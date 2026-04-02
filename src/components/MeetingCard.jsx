@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { apiGet, apiDelete } from "../api";
 import { useDarkMode } from "../context/DarkModeContext";
 import { FaLink, FaUser, FaCopy, FaTrash } from "react-icons/fa";
+import { useToast } from "./ToastProvider";
+import AppPopup from "./AppPopup";
 
 export default function MeetingCard({ meeting, onDelete }) {
   const { darkMode } = useDarkMode();
@@ -13,7 +15,9 @@ export default function MeetingCard({ meeting, onDelete }) {
   );
   const [copied, setCopied] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeletePopup, setShowDeletePopup] = useState(false);
   const navigate = useNavigate();
+  const toast = useToast();
 
   useEffect(() => {
     async function loadOwner() {
@@ -48,22 +52,20 @@ export default function MeetingCard({ meeting, onDelete }) {
     if (meetingUrl) {
       navigator.clipboard.writeText(meetingUrl);
       setCopied(true);
+      toast.success("Meeting link copied.");
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this scheduled meeting?")) {
-      return;
-    }
-
     setDeleting(true);
     try {
       await apiDelete(`/meetings/${meeting.id}`);
       if (onDelete) onDelete(meeting.id);
+      setShowDeletePopup(false);
     } catch (err) {
       console.error("Failed to delete meeting:", err);
-      alert("Failed to delete meeting");
+      toast.error("Failed to delete meeting.");
     } finally {
       setDeleting(false);
     }
@@ -161,7 +163,7 @@ export default function MeetingCard({ meeting, onDelete }) {
         {/* Delete Button - Only for scheduled (regular) meetings */}
         {canDelete && (
           <button
-            onClick={handleDelete}
+            onClick={() => setShowDeletePopup(true)}
             disabled={deleting}
             style={{
               display: "flex",
@@ -184,6 +186,19 @@ export default function MeetingCard({ meeting, onDelete }) {
           </button>
         )}
       </div>
+
+      <AppPopup
+        open={showDeletePopup}
+        title="Delete Meeting?"
+        message="This scheduled meeting will be permanently removed."
+        confirmLabel={deleting ? "Deleting..." : "Yes, Delete"}
+        cancelLabel="Cancel"
+        onConfirm={handleDelete}
+        onCancel={() => {
+          if (!deleting) setShowDeletePopup(false);
+        }}
+        confirmVariant="danger"
+      />
     </div>
   );
 }

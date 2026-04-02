@@ -3,6 +3,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
 import { API_BASE } from "../api";
+import { useToast } from "../components/ToastProvider";
+import { focusFirstInvalidField } from "../utils/formUtils";
 
 export default function VerifyEmail() {
   const { darkMode } = useDarkMode();
@@ -14,6 +16,8 @@ export default function VerifyEmail() {
   const [success, setSuccess] = useState("");
   const [info, setInfo] = useState(location.state?.message || "");
   const [resendLoading, setResendLoading] = useState(false);
+  const [fieldError, setFieldError] = useState("");
+  const toast = useToast();
 
   const cardBg = darkMode ? "#16213e" : "#fff";
   const bgColor = darkMode ? "#1a1a2e" : "#F8F9FF";
@@ -31,6 +35,7 @@ export default function VerifyEmail() {
     setError("");
     setSuccess("");
     setInfo("");
+    setFieldError("");
 
     const cleanedEmail = (sessionStorage.getItem("pending_verification_email") || "").trim().toLowerCase();
     const cleanedOtp = otp.trim();
@@ -40,6 +45,8 @@ export default function VerifyEmail() {
     }
     if (!cleanedOtp) {
       setError("OTP is required.");
+      setFieldError("OTP is required.");
+      focusFirstInvalidField(e.currentTarget);
       return;
     }
 
@@ -53,10 +60,12 @@ export default function VerifyEmail() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Failed to verify email.");
       setSuccess(data.message || "Email verified successfully.");
+      toast.success("Email verified successfully.");
       sessionStorage.removeItem("pending_verification_email");
       setTimeout(() => nav("/login"), 1200);
     } catch (err) {
       setError(err.message || "Something went wrong.");
+      toast.error(err.message || "OTP verification failed.");
     } finally {
       setLoading(false);
     }
@@ -82,8 +91,10 @@ export default function VerifyEmail() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Failed to resend OTP.");
       setInfo(data.message || "Verification OTP sent.");
+      toast.info("A new OTP has been sent.");
     } catch (err) {
       setError(err.message || "Something went wrong.");
+      toast.error(err.message || "Unable to resend OTP.");
     } finally {
       setResendLoading(false);
     }
@@ -137,7 +148,7 @@ export default function VerifyEmail() {
         )}
 
         <form onSubmit={handleVerify}>
-          <label className="small-muted" style={{ color: mutedColor }}>
+          <label className="small-muted required-label" style={{ color: mutedColor }}>
             OTP
           </label>
           <input
@@ -147,15 +158,17 @@ export default function VerifyEmail() {
             placeholder="Enter 6-digit OTP"
             inputMode="numeric"
             maxLength={6}
+            data-invalid={fieldError ? "true" : "false"}
             style={{
               background: darkMode ? "#0f0f23" : "#fff",
               color: textColor,
-              borderColor: darkMode ? "#333" : "#ddd",
+              borderColor: fieldError ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
               letterSpacing: "0.3rem",
               textAlign: "center",
               fontWeight: 700,
             }}
           />
+          {fieldError && <div className="field-error">{fieldError}</div>}
 
           <div style={{ marginTop: "1.2rem" }}>
             <ActionButton type="submit" style={{ width: "100%" }} disabled={loading}>

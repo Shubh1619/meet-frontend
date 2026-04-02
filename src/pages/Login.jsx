@@ -5,6 +5,8 @@ import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
 import { popAuthMessage, setAuthSession } from "../authSession";
 import { API_BASE } from "../api";
+import { useToast } from "../components/ToastProvider";
+import { focusFirstInvalidField } from "../utils/formUtils";
 
 export default function Login() {
   const { darkMode } = useDarkMode();
@@ -14,6 +16,8 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const toast = useToast();
 
   const nav = useNavigate();
   const location = useLocation();
@@ -41,6 +45,17 @@ export default function Login() {
     e.preventDefault();
     setErr("");
     setInfo("");
+    setFieldErrors({});
+
+    const nextErrors = {};
+    if (!email.trim()) nextErrors.email = "Email is required.";
+    if (!pass.trim()) nextErrors.password = "Password is required.";
+    if (Object.keys(nextErrors).length) {
+      setFieldErrors(nextErrors);
+      focusFirstInvalidField(e.currentTarget);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -86,6 +101,7 @@ export default function Login() {
       }
 
       nav("/dashboard");
+      toast.success("Welcome back!");
     } catch (error) {
       const message = error?.message || "Login failed";
       if (message.toLowerCase().includes("verify your email")) {
@@ -100,8 +116,10 @@ export default function Login() {
       }
       if (message.toLowerCase().includes("failed to fetch")) {
         setErr(`Cannot connect to server at ${API_BASE}. Make sure backend is running.`);
+        toast.error("Unable to reach server. Please try again.");
       } else {
         setErr(message);
+        toast.error(message);
       }
     }
 
@@ -195,16 +213,19 @@ export default function Login() {
         )}
 
         <form onSubmit={submit} style={{ textAlign: "left" }}>
-          <label className="small-muted" style={{ color: mutedColor }}>Email</label>
+          <label className="small-muted required-label" style={{ color: mutedColor }}>Email</label>
           <input
             className="input mt-1"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: darkMode ? "#333" : "#ddd" }}
+            data-invalid={fieldErrors.email ? "true" : "false"}
+            aria-invalid={fieldErrors.email ? "true" : "false"}
+            style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: fieldErrors.email ? "#dc2626" : (darkMode ? "#333" : "#ddd") }}
           />
+          {fieldErrors.email && <div className="field-error">{fieldErrors.email}</div>}
 
-          <label className="small-muted mt-1" style={{ color: mutedColor }}>Password</label>
+          <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>Password</label>
           <div style={{ position: "relative" }}>
             <input
               type={showPassword ? "text" : "password"}
@@ -212,7 +233,9 @@ export default function Login() {
               value={pass}
               onChange={(e) => setPass(e.target.value)}
               required
-              style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: darkMode ? "#333" : "#ddd", width: "100%", paddingRight: "45px" }}
+              data-invalid={fieldErrors.password ? "true" : "false"}
+              aria-invalid={fieldErrors.password ? "true" : "false"}
+              style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: fieldErrors.password ? "#dc2626" : (darkMode ? "#333" : "#ddd"), width: "100%", paddingRight: "45px" }}
             />
             <span
               onClick={() => setShowPassword(!showPassword)}
@@ -228,6 +251,7 @@ export default function Login() {
               {showPassword ? <FaEyeSlash /> : <FaEye />}
             </span>
           </div>
+          {fieldErrors.password && <div className="field-error">{fieldErrors.password}</div>}
 
           <div style={{ marginTop: "1.5rem" }}>
             <ActionButton type="submit" style={{ width: "100%" }} disabled={loading}>

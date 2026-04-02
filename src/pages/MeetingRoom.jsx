@@ -7,6 +7,7 @@ import RecordingModal from "./RecordingModal";
 import VideoTile from "./VideoTile";
 import useMeetingPermissions from "../hooks/useMeetingPermissions";
 import { API_BASE } from "../api";
+import { useToast } from "../components/ToastProvider";
 import "./MeetingRoom.css";
 
 export default function MeetingRoom() {
@@ -51,13 +52,13 @@ export default function MeetingRoom() {
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [captions, setCaptions] = useState({});
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
-  const [toast, setToast] = useState("");
   const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 767);
   const [previewStream, setPreviewStream] = useState(null);
   const [previewMicOn, setPreviewMicOn] = useState(false);
   const [previewCamOn, setPreviewCamOn] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const previewVideoRef = useRef(null);
+  const toast = useToast();
 
   const {
     permissionState,
@@ -274,12 +275,6 @@ export default function MeetingRoom() {
   }, [meetingInfo, setPermissions]);
 
   useEffect(() => {
-    if (!toast) return;
-    const timer = setTimeout(() => setToast(""), 2600);
-    return () => clearTimeout(timer);
-  }, [toast]);
-
-  useEffect(() => {
     if (!meetingReady) return;
 
     if (hostSessionId) {
@@ -442,7 +437,7 @@ export default function MeetingRoom() {
 
   const toggleScreenShare = useCallback(async () => {
     if (!canScreenShare) {
-      setToast("Feature disabled by host");
+      toast.warning("Feature disabled by host.");
       return;
     }
     const localStream = localStreamRef.current;
@@ -494,7 +489,7 @@ export default function MeetingRoom() {
         };
       } catch (error) {
         console.error("Screen share error:", error);
-        alert("Unable to start screen sharing.");
+        toast.error("Unable to start screen sharing.");
       }
       return;
     }
@@ -523,14 +518,14 @@ export default function MeetingRoom() {
   useEffect(() => {
     if (!canScreenShare && isScreenSharing) {
       toggleScreenShare();
-      setToast("Screen share was turned off by host");
+      toast.info("Screen share was turned off by host.");
     }
   }, [canScreenShare, isScreenSharing, toggleScreenShare]);
 
   useEffect(() => {
     if (!canUseCaptions && captionsEnabled) {
       setCaptionsEnabled(false);
-      setToast("Captions were turned off by host");
+      toast.info("Captions were turned off by host.");
     }
   }, [canUseCaptions, captionsEnabled]);
 
@@ -588,7 +583,7 @@ export default function MeetingRoom() {
       setRecordingModalMode("start");
     } catch (error) {
       console.error("Unable to start recording:", error);
-      alert("Recording did not start. Please choose what to record and confirm.");
+      toast.warning("Recording did not start. Please choose what to record and confirm.");
     }
   }, []);
 
@@ -846,10 +841,10 @@ export default function MeetingRoom() {
       switch (msg.type) {
         case "permission_update":
           applyPermissionUpdate(msg);
-          setToast("Meeting permissions updated");
+          toast.info("Meeting permissions updated.");
           return;
         case "error":
-          setToast(msg.message || "Permission denied");
+          toast.error(msg.message || "Permission denied");
           return;
         case "waiting-user":
           setWaitingUsers((prev) => {
@@ -925,7 +920,7 @@ export default function MeetingRoom() {
           return;
 
         case "denied":
-          alert(msg.message || "Your entry was denied by the host.");
+          toast.error(msg.message || "Your entry was denied by the host.");
           setIsInWaitingRoom(false);
           setSetupVisible(true);
           setRoomVisible(false);
@@ -1011,15 +1006,15 @@ export default function MeetingRoom() {
           setWaitingUsers((prev) => prev.filter((user) => user.client_id !== msg.client_id));
           break;
         case "removed":
-          alert(msg.message || "You were removed from the meeting.");
+          toast.error(msg.message || "You were removed from the meeting.");
           leaveMeeting();
           return;
         case "host-left":
-          alert(msg.message || "The host has left the meeting.");
+          toast.warning(msg.message || "The host has left the meeting.");
           leaveMeeting();
           return;
         case "host-left-continue":
-          alert(msg.message || "Host left. Meeting continues.");
+          toast.info(msg.message || "Host left. Meeting continues.");
           return;
         case "user-left":
           if (pcsRef.current[msg.id]) {
@@ -1125,7 +1120,7 @@ export default function MeetingRoom() {
         } catch (mediaError) {
           console.warn("Media unavailable. Joining without camera/microphone.", mediaError);
           stream = new MediaStream();
-          setToast("Joined without camera/microphone.");
+          toast.info("Joined without camera/microphone.");
         }
       }
 
@@ -1144,7 +1139,7 @@ export default function MeetingRoom() {
     } catch (e) {
       hasJoinedRef.current = false;
       console.error("Join error", e);
-      alert("Could not join meeting. Please try again.");
+      toast.error("Could not join meeting. Please try again.");
       return;
     }
 
@@ -1226,7 +1221,7 @@ export default function MeetingRoom() {
 
   const sendHostAction = useCallback((type, target_client_id) => {
     if (!(canAdminControl || isHostUser)) {
-      setToast("Host only action");
+      toast.warning("Host-only action.");
       return;
     }
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -1236,12 +1231,12 @@ export default function MeetingRoom() {
 
   const generateAISummary = useCallback(() => {
     if (!canGenerateAI) {
-      setToast("Feature disabled by host");
+      toast.warning("Feature disabled by host.");
       return;
     }
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: "generate_ai_summary", room_id: roomId }));
-      setToast("AI summary request sent");
+      toast.success("AI summary request sent.");
     }
   }, [canGenerateAI, roomId]);
 
@@ -1259,14 +1254,14 @@ export default function MeetingRoom() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setToast(data?.error || "Permission denied");
+        toast.error(data?.error || "Permission denied");
         return;
       }
       applyPermissionUpdate({ permissions: data.permissions });
-      setToast("Permissions updated");
+      toast.success("Permissions updated.");
     } catch (error) {
       console.error("Permission update failed", error);
-      setToast("Failed to update permissions");
+      toast.error("Failed to update permissions.");
     }
   }, [applyPermissionUpdate, canAdminControl, roomId]);
 
@@ -1331,11 +1326,11 @@ export default function MeetingRoom() {
         });
       } else {
         await navigator.clipboard.writeText(recordedBlobUrl);
-        alert("Share is not available on this device. Recording link copied.");
+        toast.info("Share is not available on this device. Recording link copied.");
       }
     } catch (error) {
       console.error("Share failed:", error);
-      alert("Unable to share recording right now.");
+      toast.error("Unable to share recording right now.");
     }
   }, [recordedBlobUrl]);
 
@@ -1426,7 +1421,7 @@ export default function MeetingRoom() {
             onClick={() => {
               const trimmedName = (myName || "").trim();
               if (!isLoggedIn && !trimmedName) {
-                alert("Please enter your name to continue.");
+                toast.warning("Please enter your name to continue.");
                 return;
               }
               joinCall(roomId || "default-room", trimmedName || profileUser?.name || "Guest");
@@ -1625,7 +1620,7 @@ export default function MeetingRoom() {
           onShareScreen={() => toggleScreenShare()}
           onRecord={() => {
             if (!isLoggedIn) {
-              setToast("Login required");
+              toast.warning("Login required.");
               return;
             }
             if (isRecording) {
@@ -1637,7 +1632,7 @@ export default function MeetingRoom() {
           }}
           onCaptions={() => {
             if (!canUseCaptions) {
-              setToast("Feature disabled by host");
+              toast.warning("Feature disabled by host.");
               return;
             }
             setCaptionsEnabled(!captionsEnabled);
@@ -1729,12 +1724,6 @@ export default function MeetingRoom() {
             </aside>
           </>
         )}
-        {toast && (
-          <div className="meeting-state-card" style={{ position: "fixed", bottom: 24, right: 24, zIndex: 9999, padding: "10px 14px" }}>
-            <p style={{ margin: 0 }}>{toast}</p>
-          </div>
-        )}
-
         {/* Recording Modal */}
         <RecordingModal
           isOpen={recordingModalOpen}

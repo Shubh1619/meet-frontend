@@ -338,7 +338,7 @@ export default function Profile() {
           )}
 
           <form onSubmit={handleChangePassword}>
-            <label className="small-muted" style={{ color: mutedColor }}>
+            <label className="small-muted required-label" style={{ color: mutedColor }}>
               Current Password
             </label>
             <div style={{ position: "relative" }}>
@@ -364,7 +364,7 @@ export default function Profile() {
               </span>
             </div>
 
-            <label className="small-muted mt-1" style={{ color: mutedColor }}>
+            <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
               New Password
             </label>
             <div style={{ position: "relative" }}>
@@ -390,7 +390,7 @@ export default function Profile() {
               </span>
             </div>
 
-            <label className="small-muted mt-1" style={{ color: mutedColor }}>
+            <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
               Confirm New Password
             </label>
             <div style={{ position: "relative" }}>
@@ -438,7 +438,7 @@ export default function Profile() {
 
           {pendingPasswordOtp && (
             <form onSubmit={handleConfirmPasswordOtp} style={{ marginTop: "1rem" }}>
-              <label className="small-muted" style={{ color: mutedColor }}>
+              <label className="small-muted required-label" style={{ color: mutedColor }}>
                 Email OTP
               </label>
               <input

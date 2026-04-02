@@ -6,6 +6,7 @@ import ActionButton from "../components/ActionButton";
 import NotesModal from "../components/NotesModal";
 import { apiDelete, apiGet, apiPost, apiPut } from "../api";
 import { useDarkMode } from "../context/DarkModeContext";
+import { useToast } from "../components/ToastProvider";
 import "./Dashboard.css";
 
 function isMeaningfulNote(value) {
@@ -34,6 +35,7 @@ export default function Dashboard() {
   const [noteError, setNoteError] = useState("");
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [isNotesModalOpen, setIsNotesModalOpen] = useState(false);
+  const toast = useToast();
 
   const isMountedRef = useRef(true);
 
@@ -173,10 +175,10 @@ export default function Dashboard() {
         await refreshMonthNoteDates(selectedDate);
       } catch (err) {
         console.error("Failed to delete note", err);
-        alert("Error deleting note");
+        toast.error("Unable to delete note.");
       }
     },
-    [selectedDate, refreshMonthNoteDates],
+    [selectedDate, refreshMonthNoteDates, toast],
   );
 
   return (
