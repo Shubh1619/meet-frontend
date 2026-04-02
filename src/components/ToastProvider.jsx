@@ -3,10 +3,10 @@ import React, { createContext, useCallback, useContext, useMemo, useState } from
 const ToastContext = createContext(null);
 
 const ICONS = {
-  success: "✅",
-  error: "❌",
-  warning: "⚠️",
-  info: "ℹ️",
+  success: "\u2705",
+  error: "\u274c",
+  warning: "\u26a0\ufe0f",
+  info: "\u2139\ufe0f",
 };
 
 function ToastItem({ toast, onClose }) {
@@ -55,7 +55,9 @@ function ToastItem({ toast, onClose }) {
           <div className="app-toast-progress-fill" style={{ width: `${progress}%` }} />
         </div>
       </div>
-      <button className="app-toast-close" onClick={() => onClose(toast.id)} aria-label="Close notification">×</button>
+      <button className="app-toast-close" onClick={() => onClose(toast.id)} aria-label="Close notification">
+        {"\u00d7"}
+      </button>
     </div>
   );
 }
@@ -73,14 +75,17 @@ export function ToastProvider({ children }) {
     return id;
   }, []);
 
-  const api = useMemo(() => ({
-    success: (message, title = "Success", duration) => push("success", message, title, duration),
-    error: (message, title = "Error", duration) => push("error", message, title, duration),
-    warning: (message, title = "Warning", duration) => push("warning", message, title, duration),
-    info: (message, title = "Info", duration) => push("info", message, title, duration),
-    push,
-    dismiss: removeToast,
-  }), [push, removeToast]);
+  const api = useMemo(
+    () => ({
+      success: (message, title = "Success", duration) => push("success", message, title, duration),
+      error: (message, title = "Error", duration) => push("error", message, title, duration),
+      warning: (message, title = "Warning", duration) => push("warning", message, title, duration),
+      info: (message, title = "Info", duration) => push("info", message, title, duration),
+      push,
+      dismiss: removeToast,
+    }),
+    [push, removeToast]
+  );
 
   return (
     <ToastContext.Provider value={api}>

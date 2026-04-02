@@ -1,23 +1,94 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
+import {
+  FaEye,
+  FaEyeSlash,
+  FaMoon,
+  FaBell,
+  FaEnvelopeOpenText,
+  FaBolt,
+  FaCalendarAlt,
+  FaChartLine,
+  FaCamera,
+  FaUserEdit,
+  FaShieldAlt,
+  FaClock,
+  FaCheckCircle,
+  FaSignOutAlt,
+  FaCircle,
+} from "react-icons/fa";
 import { useDarkMode } from "../context/DarkModeContext";
 import { clearAuthSession, getRefreshToken } from "../authSession";
 import { API_BASE } from "../api";
+import { useToast } from "../components/ToastProvider";
+import AppPopup from "../components/AppPopup";
+import { focusFirstInvalidField } from "../utils/formUtils";
+import "./Profile.css";
+
+const PERSIST_KEYS = {
+  avatar: "profile_avatar_data_url",
+  notifications: "profile_notifications_enabled",
+  reminders: "profile_email_reminders_enabled",
+};
+
+function calculatePasswordStrength(password) {
+  if (!password) return { label: "Weak", score: 0, percentage: 0 };
+
+  let score = 0;
+  if (password.length >= 8) score += 1;
+  if (password.length >= 12) score += 1;
+  if (/[A-Z]/.test(password)) score += 1;
+  if (/[a-z]/.test(password)) score += 1;
+  if (/\d/.test(password)) score += 1;
+  if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) score += 1;
+
+  if (score <= 2) return { label: "Weak", score, percentage: 30 };
+  if (score <= 4) return { label: "Medium", score, percentage: 62 };
+  return { label: "Strong", score, percentage: 100 };
+}
+
+function formatDateTime(value) {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not available";
+  return date.toLocaleString();
+}
+
+function getInitials(name) {
+  if (!name) return "?";
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 export default function Profile() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { darkMode, toggleDarkMode } = useDarkMode();
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState("");
+
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editableName, setEditableName] = useState("");
+  const [nameError, setNameError] = useState("");
+
+  const [avatarDataUrl, setAvatarDataUrl] = useState(() => localStorage.getItem(PERSIST_KEYS.avatar) || "");
+  const avatarInputRef = useRef(null);
+
+  const [notificationsEnabled, setNotificationsEnabled] = useState(
+    localStorage.getItem(PERSIST_KEYS.notifications) !== "false"
+  );
+  const [emailRemindersEnabled, setEmailRemindersEnabled] = useState(
+    localStorage.getItem(PERSIST_KEYS.reminders) !== "false"
+  );
+
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwdLoading, setPwdLoading] = useState(false);
-  const [pwdError, setPwdError] = useState("");
-  const [pwdSuccess, setPwdSuccess] = useState("");
   const [pendingPasswordOtp, setPendingPasswordOtp] = useState(false);
   const [passwordOtp, setPasswordOtp] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
@@ -25,11 +96,31 @@ export default function Profile() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  const [pwdSuccess, setPwdSuccess] = useState("");
+  const [pwdError, setPwdError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
+  const passwordFormRef = useRef(null);
+  const otpFormRef = useRef(null);
+
   useEffect(() => {
     if (!localStorage.getItem("token")) {
       navigate("/login");
     }
   }, [navigate]);
+
+  useEffect(() => {
+    localStorage.setItem(PERSIST_KEYS.notifications, String(notificationsEnabled));
+  }, [notificationsEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem(PERSIST_KEYS.reminders, String(emailRemindersEnabled));
+  }, [emailRemindersEnabled]);
+
+  useEffect(() => {
+    if (avatarDataUrl) {
+      localStorage.setItem(PERSIST_KEYS.avatar, avatarDataUrl);
+    }
+  }, [avatarDataUrl]);
 
   useEffect(() => {
     async function fetchUser() {
@@ -47,13 +138,20 @@ export default function Profile() {
 
         const data = await res.json();
         setUser(data);
+        setEditableName(data?.name || "");
         localStorage.setItem("user", JSON.stringify(data));
       } catch (err) {
-        console.error("Error fetching user:", err);
-        setError(err.message);
+        const message = err?.message || "Unable to load profile.";
+        setError(message);
         const cached = localStorage.getItem("user");
         if (cached) {
-          setUser(JSON.parse(cached));
+          try {
+            const parsed = JSON.parse(cached);
+            setUser(parsed);
+            setEditableName(parsed?.name || "");
+          } catch {
+            setUser(null);
+          }
         }
       } finally {
         setLoading(false);
@@ -63,21 +161,26 @@ export default function Profile() {
     fetchUser();
   }, []);
 
-  const getInitials = (name) => {
-    if (!name) return "?";
-    const parts = name.split(" ");
-    if (parts.length >= 2) {
-      return (parts[0][0] + parts[1][0]).toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
-  };
+  const passwordStrength = useMemo(() => calculatePasswordStrength(newPassword), [newPassword]);
 
-  const getAvatarColor = (name) => {
-    if (!name) return "#6759FF";
-    const colors = ["#6759FF", "#FF6B6B", "#4ECDC4", "#FFE66D", "#95E1D3", "#F38181", "#AA96DA"];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
-  };
+  const accountStatus = user?.is_active === false ? "Inactive" : "Active";
+  const lastLoginValue =
+    user?.last_login ||
+    user?.last_login_at ||
+    user?.last_seen ||
+    user?.updated_at ||
+    localStorage.getItem("last_login_at");
+
+  const profileCompletion = useMemo(() => {
+    const checks = [
+      Boolean(user?.name),
+      Boolean(user?.email),
+      Boolean(user?.email_verified),
+      Boolean(avatarDataUrl),
+    ];
+    const done = checks.filter(Boolean).length;
+    return Math.round((done / checks.length) * 100);
+  }, [avatarDataUrl, user]);
 
   const handleLogout = () => {
     const refreshToken = getRefreshToken();
@@ -100,8 +203,33 @@ export default function Profile() {
     if (!/[A-Z]/.test(value)) return "Password must include at least one uppercase letter.";
     if (!/[a-z]/.test(value)) return "Password must include at least one lowercase letter.";
     if (!/\d/.test(value)) return "Password must include at least one number.";
-    if (!/[!@#$%^&*(),.?\":{}|<>]/.test(value)) return "Password must include at least one special character.";
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(value)) return "Password must include at least one special character.";
     return "";
+  };
+
+  const validatePasswordForm = () => {
+    const nextErrors = {};
+
+    if (!oldPassword.trim()) nextErrors.oldPassword = "Current password is required.";
+    if (!newPassword.trim()) {
+      nextErrors.newPassword = "New password is required.";
+    } else {
+      const validation = validateNewPassword(newPassword);
+      if (validation) nextErrors.newPassword = validation;
+    }
+
+    if (!confirmPassword.trim()) {
+      nextErrors.confirmPassword = "Please confirm your new password.";
+    } else if (newPassword !== confirmPassword) {
+      nextErrors.confirmPassword = "New password and confirm password do not match.";
+    }
+
+    if (newPassword && oldPassword && newPassword === oldPassword) {
+      nextErrors.newPassword = "New password must be different from current password.";
+    }
+
+    setFieldErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
   const handleChangePassword = async (e) => {
@@ -109,24 +237,10 @@ export default function Profile() {
     setPwdError("");
     setPwdSuccess("");
 
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      setPwdError("All password fields are required.");
-      return;
-    }
-
-    const pwdValidation = validateNewPassword(newPassword);
-    if (pwdValidation) {
-      setPwdError(pwdValidation);
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPwdError("New password and confirm password do not match.");
-      return;
-    }
-
-    if (newPassword === oldPassword) {
-      setPwdError("New password must be different from current password.");
+    const isValid = validatePasswordForm();
+    if (!isValid) {
+      toast.error("Please fix the highlighted password fields.", "Validation");
+      focusFirstInvalidField(passwordFormRef.current);
       return;
     }
 
@@ -148,14 +262,19 @@ export default function Profile() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Failed to change password.");
 
-      setPwdSuccess(data.message || "Password change OTP sent.");
+      const successMsg = data.message || "Password change OTP sent.";
+      setPwdSuccess(successMsg);
       setPendingPasswordOtp(true);
       setPasswordOtp("");
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setFieldErrors({});
+      toast.success("OTP sent to your email for password confirmation.", "Verification required");
     } catch (err) {
-      setPwdError(err.message || "Something went wrong.");
+      const message = err?.message || "Something went wrong.";
+      setPwdError(message);
+      toast.error(message, "Password update failed");
     } finally {
       setPwdLoading(false);
     }
@@ -168,7 +287,10 @@ export default function Profile() {
 
     const cleanedOtp = passwordOtp.trim();
     if (!cleanedOtp) {
-      setPwdError("Enter the OTP sent to your email.");
+      const otpError = "Enter the OTP sent to your email.";
+      setFieldErrors((prev) => ({ ...prev, otp: otpError }));
+      setPwdError(otpError);
+      focusFirstInvalidField(otpFormRef.current);
       return;
     }
 
@@ -186,577 +308,420 @@ export default function Profile() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Failed to confirm password change.");
 
-      setPwdSuccess(data.message || "Password changed successfully.");
+      const successMsg = data.message || "Password changed successfully.";
+      setPwdSuccess(successMsg);
       setPendingPasswordOtp(false);
       setPasswordOtp("");
+      setFieldErrors((prev) => ({ ...prev, otp: "" }));
+      toast.success("Password updated successfully.", "Security updated");
     } catch (err) {
-      setPwdError(err.message || "Something went wrong.");
+      const message = err?.message || "Something went wrong.";
+      setPwdError(message);
+      toast.error(message, "OTP verification failed");
     } finally {
       setOtpLoading(false);
     }
   };
 
-  const cardBg = darkMode ? "#16213e" : "#fff";
-  const pageBg = darkMode ? "#1a1a2e" : "#F8F9FF";
-  const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
-  const mutedColor = darkMode ? "#9ca3af" : "#6b7280";
-  const softBg = darkMode ? "#101426" : "#F8F9FF";
-  const borderColor = darkMode ? "#2a3148" : "#eef1f6";
+  const handleAvatarClick = () => {
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.warning("Please upload an image file.", "Invalid file");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.warning("Image should be smaller than 2 MB.", "Large file");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = typeof reader.result === "string" ? reader.result : "";
+      if (!url) return;
+      setAvatarDataUrl(url);
+      toast.success("Profile photo updated.", "Avatar changed");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = () => {
+    const trimmed = editableName.trim();
+    if (trimmed.length < 2) {
+      setNameError("Please enter your full name.");
+      return;
+    }
+
+    setNameError("");
+    const updated = { ...(user || {}), name: trimmed };
+    setUser(updated);
+    localStorage.setItem("user", JSON.stringify(updated));
+    setEditMode(false);
+    toast.success("Profile details updated.", "Saved");
+  };
+
+  const handleDarkModeToggle = () => {
+    toggleDarkMode();
+    if (darkMode) {
+      toast.info("Light mode enabled.", "Theme updated");
+    } else {
+      toast.success("Dark mode enabled ??", "Theme updated");
+    }
+  };
+
+  const handleToggleNotifications = () => {
+    setNotificationsEnabled((prev) => {
+      const next = !prev;
+      toast.info(next ? "Notifications enabled." : "Notifications muted.", "Settings");
+      return next;
+    });
+  };
+
+  const handleToggleReminders = () => {
+    setEmailRemindersEnabled((prev) => {
+      const next = !prev;
+      toast.info(next ? "Email reminders enabled." : "Email reminders turned off.", "Settings");
+      return next;
+    });
+  };
 
   if (loading) {
     return (
-      <div style={{ ...styles.container, background: pageBg }}>
-        <div style={{ ...styles.loadingCard, background: cardBg, color: textColor }}>
-          <div style={styles.spinner} />
-          <p>Loading profile...</p>
+      <div className={`profile-page ${darkMode ? "profile-page--dark" : ""}`}>
+        <div className="profile-loading-card">
+          <div className="profile-spinner" />
+          <p>Loading your profile...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ ...styles.container, background: pageBg }}>
-      <div style={{ ...styles.profileCard, background: cardBg }}>
-        <div style={styles.header}>
-          <div style={{ ...styles.avatar, background: getAvatarColor(user?.name) }}>
-            {getInitials(user?.name)}
+    <div className={`profile-page ${darkMode ? "profile-page--dark" : ""}`}>
+      <div className="profile-shell">
+        <section className="profile-header-card">
+          <div className="profile-header-glow" />
+          <button className="profile-edit-btn" type="button" onClick={() => setEditMode((prev) => !prev)}>
+            <FaUserEdit />
+            {editMode ? "Cancel Edit" : "Edit Profile"}
+          </button>
+
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            className="profile-avatar-input"
+            onChange={handleAvatarChange}
+          />
+
+          <button className="profile-avatar" type="button" onClick={handleAvatarClick} title="Change profile photo">
+            {avatarDataUrl ? (
+              <img src={avatarDataUrl} alt="Profile avatar" className="profile-avatar-image" />
+            ) : (
+              <span>{getInitials(user?.name)}</span>
+            )}
+            <span className="profile-avatar-overlay">
+              <FaCamera />
+              Change
+            </span>
+          </button>
+
+          <div className="profile-identity">
+            {editMode ? (
+              <>
+                <label className="required-label profile-input-label">Full Name</label>
+                <input
+                  type="text"
+                  value={editableName}
+                  onChange={(e) => setEditableName(e.target.value)}
+                  className={`profile-input ${nameError ? "input-invalid" : ""}`}
+                  data-invalid={nameError ? "true" : "false"}
+                  placeholder="Enter your full name"
+                />
+                {nameError ? <p className="field-error">{nameError}</p> : null}
+                <button className="profile-save-btn" type="button" onClick={handleSaveProfile}>
+                  Save Changes
+                </button>
+              </>
+            ) : (
+              <>
+                <h1>{user?.name || "User"}</h1>
+                <p>{user?.email || "No email"}</p>
+              </>
+            )}
           </div>
-          <h2 style={styles.userName}>{user?.name || "User"}</h2>
-          <p style={styles.userEmail}>{user?.email}</p>
-        </div>
 
-        {error && (
-          <div style={styles.errorAlert}>
-            {error}
+          <div className="profile-meta-grid">
+            <article className="profile-meta-card">
+              <div className="profile-meta-label">
+                <FaClock /> Last Login
+              </div>
+              <div className="profile-meta-value">{formatDateTime(lastLoginValue)}</div>
+            </article>
+
+            <article className="profile-meta-card">
+              <div className="profile-meta-label">
+                <FaCheckCircle /> Account Status
+              </div>
+              <div className="profile-meta-value">{accountStatus}</div>
+            </article>
+
+            <article className="profile-meta-card">
+              <div className="profile-meta-label">
+                <FaShieldAlt /> Profile Completion
+              </div>
+              <div className="profile-progress-row">
+                <div className="profile-progress-track">
+                  <div className="profile-progress-fill" style={{ width: `${profileCompletion}%` }} />
+                </div>
+                <span>{profileCompletion}%</span>
+              </div>
+            </article>
           </div>
-        )}
+        </section>
 
-        <div style={{ ...styles.section, borderBottom: `1px solid ${borderColor}` }}>
-          <h3 style={styles.sectionTitle}>Profile Information</h3>
+        {error ? <div className="profile-banner-error">{error}</div> : null}
 
-          <div style={{ ...styles.responsiveRow, borderBottom: `1px solid ${borderColor}` }}>
-            <div style={{ ...styles.infoLabel, color: mutedColor }}>
-              <span style={styles.infoIcon}>ID</span>
-              Full Name
+        <section className="profile-section-card">
+          <div className="profile-section-heading">Settings</div>
+          <div className="profile-setting-row">
+            <div>
+              <p className="profile-setting-title"><FaMoon /> Dark Mode</p>
+              <p className="profile-setting-desc">Use a low-light theme for comfortable viewing.</p>
             </div>
-            <div style={{ ...styles.infoValue, color: textColor }}>{user?.name || "Not set"}</div>
-          </div>
-
-          <div style={styles.responsiveRow}>
-            <div style={{ ...styles.infoLabel, color: mutedColor }}>
-              <span style={styles.infoIcon}>@</span>
-              Email Address
-            </div>
-            <div style={{ ...styles.infoValue, color: textColor, overflowWrap: "anywhere" }}>{user?.email}</div>
-          </div>
-        </div>
-
-        <div style={{ ...styles.section, borderBottom: `1px solid ${borderColor}` }}>
-          <h3 style={styles.sectionTitle}>Settings</h3>
-
-          <div style={{ ...styles.responsiveRow, borderBottom: `1px solid ${borderColor}` }}>
-            <div style={{ ...styles.settingLabel, color: mutedColor }}>
-              <span style={styles.settingIcon}>DM</span>
-              Dark Mode
-            </div>
-            <label style={styles.toggle}>
-              <input
-                type="checkbox"
-                checked={darkMode}
-                onChange={toggleDarkMode}
-                style={styles.toggleInput}
-              />
-              <span style={{ ...styles.toggleSlider, background: darkMode ? "#6759FF" : "#ddd" }} />
+            <label className="profile-toggle">
+              <input type="checkbox" checked={darkMode} onChange={handleDarkModeToggle} />
+              <span />
             </label>
           </div>
 
-          <div style={{ ...styles.responsiveRow, borderBottom: `1px solid ${borderColor}` }}>
-            <div style={{ ...styles.settingLabel, color: mutedColor }}>
-              <span style={styles.settingIcon}>NT</span>
-              Notifications
+          <div className="profile-divider" />
+
+          <div className="profile-setting-row">
+            <div>
+              <p className="profile-setting-title"><FaBell /> Notifications</p>
+              <p className="profile-setting-desc">Receive product and meeting notifications.</p>
             </div>
-            <label style={styles.toggle}>
-              <input type="checkbox" defaultChecked style={styles.toggleInput} />
-              <span style={styles.toggleSlider} />
+            <label className="profile-toggle">
+              <input type="checkbox" checked={notificationsEnabled} onChange={handleToggleNotifications} />
+              <span />
             </label>
           </div>
 
-          <div style={styles.responsiveRow}>
-            <div style={{ ...styles.settingLabel, color: mutedColor }}>
-              <span style={styles.settingIcon}>EM</span>
-              Email Reminders
+          <div className="profile-divider" />
+
+          <div className="profile-setting-row">
+            <div>
+              <p className="profile-setting-title"><FaEnvelopeOpenText /> Email Reminders</p>
+              <p className="profile-setting-desc">Get reminder emails for upcoming meetings.</p>
             </div>
-            <label style={styles.toggle}>
-              <input type="checkbox" defaultChecked style={styles.toggleInput} />
-              <span style={styles.toggleSlider} />
+            <label className="profile-toggle">
+              <input type="checkbox" checked={emailRemindersEnabled} onChange={handleToggleReminders} />
+              <span />
             </label>
           </div>
-        </div>
+        </section>
 
-        <div style={{ ...styles.section, borderBottom: `1px solid ${borderColor}` }}>
-          <h3 style={styles.sectionTitle}>Quick Actions</h3>
-
-          <div style={styles.actionsGrid}>
-            <button style={{ ...styles.actionBtn, background: softBg, color: textColor, border: `1px solid ${borderColor}` }} onClick={() => navigate("/instant")}>
-              <span style={styles.actionIcon}>IM</span>
-              Instant Meeting
-            </button>
-
-            <button style={{ ...styles.actionBtn, background: softBg, color: textColor, border: `1px solid ${borderColor}` }} onClick={() => navigate("/schedule")}>
-              <span style={styles.actionIcon}>SC</span>
-              Schedule Meeting
-            </button>
-
-            <button style={{ ...styles.actionBtn, background: softBg, color: textColor, border: `1px solid ${borderColor}` }} onClick={() => navigate("/dashboard")}>
-              <span style={styles.actionIcon}>DB</span>
-              Dashboard
-            </button>
-          </div>
-        </div>
-
-        <div style={{ ...styles.section, borderBottom: `1px solid ${borderColor}` }}>
-          <h3 style={styles.sectionTitle}>Security</h3>
-
-          {pwdError && (
-            <div style={styles.errorAlert}>
-              {pwdError}
-            </div>
-          )}
-
-          {pwdSuccess && (
-            <div
-              style={{
-                background: "#e9fbe9",
-                color: "#1d7c35",
-                padding: "0.8rem 1rem",
-                borderRadius: 10,
-                marginBottom: "1rem",
-              }}
+        <section className="profile-section-card">
+          <div className="profile-section-heading">Quick Actions</div>
+          <div className="profile-actions-grid">
+            <button
+              type="button"
+              className="profile-action-card"
+              title="Start a meeting right away"
+              onClick={() => navigate("/instant")}
             >
-              {pwdSuccess}
-            </div>
-          )}
-
-          <form onSubmit={handleChangePassword}>
-            <label className="small-muted required-label" style={{ color: mutedColor }}>
-              Current Password
-            </label>
-            <div style={{ position: "relative" }}>
-              <input
-                type={showOldPassword ? "text" : "password"}
-                className="input mt-1"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                style={{ background: softBg, color: textColor, borderColor, paddingRight: "45px" }}
-              />
-              <span
-                onClick={() => setShowOldPassword(!showOldPassword)}
-                style={{
-                  position: "absolute",
-                  right: 12,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  cursor: "pointer",
-                  color: mutedColor,
-                }}
-              >
-                {showOldPassword ? <FaEyeSlash /> : <FaEye />}
-              </span>
-            </div>
-
-            <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
-              New Password
-            </label>
-            <div style={{ position: "relative" }}>
-              <input
-                type={showNewPassword ? "text" : "password"}
-                className="input mt-1"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                style={{ background: softBg, color: textColor, borderColor, paddingRight: "45px" }}
-              />
-              <span
-                onClick={() => setShowNewPassword(!showNewPassword)}
-                style={{
-                  position: "absolute",
-                  right: 12,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  cursor: "pointer",
-                  color: mutedColor,
-                }}
-              >
-                {showNewPassword ? <FaEyeSlash /> : <FaEye />}
-              </span>
-            </div>
-
-            <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
-              Confirm New Password
-            </label>
-            <div style={{ position: "relative" }}>
-              <input
-                type={showConfirmPassword ? "text" : "password"}
-                className="input mt-1"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                style={{ background: softBg, color: textColor, borderColor, paddingRight: "45px" }}
-              />
-              <span
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={{
-                  position: "absolute",
-                  right: 12,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  cursor: "pointer",
-                  color: mutedColor,
-                }}
-              >
-                {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-              </span>
-            </div>
+              <div className="profile-action-icon"><FaBolt /></div>
+              <div>
+                <p className="profile-action-title">Instant Meeting</p>
+                <p className="profile-action-desc">Start now and invite participants instantly.</p>
+              </div>
+            </button>
 
             <button
-              type="submit"
-              style={{
-                width: "100%",
-                marginTop: "1rem",
-                padding: "0.8rem",
-                borderRadius: 10,
-                border: "none",
-                background: "#6759FF",
-                color: "#fff",
-                fontWeight: 600,
-                cursor: pwdLoading ? "not-allowed" : "pointer",
-                opacity: pwdLoading ? 0.75 : 1,
-              }}
-              disabled={pwdLoading}
+              type="button"
+              className="profile-action-card"
+              title="Schedule a meeting for later"
+              onClick={() => navigate("/schedule")}
             >
+              <div className="profile-action-icon"><FaCalendarAlt /></div>
+              <div>
+                <p className="profile-action-title">Schedule Meeting</p>
+                <p className="profile-action-desc">Plan meetings with date, time, and agenda.</p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="profile-action-card"
+              title="Open your dashboard"
+              onClick={() => navigate("/dashboard")}
+            >
+              <div className="profile-action-icon"><FaChartLine /></div>
+              <div>
+                <p className="profile-action-title">Dashboard</p>
+                <p className="profile-action-desc">Track upcoming meetings and key insights.</p>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        <section className="profile-section-card">
+          <div className="profile-section-heading">Security</div>
+
+          <ul className="password-rule-list">
+            <li>Minimum 8 characters</li>
+            <li>At least one uppercase, lowercase, number, and special character</li>
+            <li>New password must be different from current password</li>
+          </ul>
+
+          <div className="password-strength-wrap" aria-live="polite">
+            <div className="password-strength-track">
+              <div
+                className={`password-strength-fill password-strength-${passwordStrength.label.toLowerCase()}`}
+                style={{ width: `${passwordStrength.percentage}%` }}
+              />
+            </div>
+            <span className={`password-strength-label password-strength-${passwordStrength.label.toLowerCase()}-text`}>
+              Strength: {passwordStrength.label}
+            </span>
+          </div>
+
+          {pwdError ? <div className="profile-banner-error profile-inline-banner">{pwdError}</div> : null}
+          {pwdSuccess ? <div className="profile-banner-success profile-inline-banner">{pwdSuccess}</div> : null}
+
+          <form ref={passwordFormRef} onSubmit={handleChangePassword} noValidate className="profile-form-grid">
+            <div>
+              <label className="required-label profile-input-label">Current Password</label>
+              <div className="profile-password-wrap">
+                <input
+                  type={showOldPassword ? "text" : "password"}
+                  className={`profile-input ${fieldErrors.oldPassword ? "input-invalid" : ""}`}
+                  value={oldPassword}
+                  onChange={(e) => {
+                    setOldPassword(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, oldPassword: "" }));
+                  }}
+                  data-invalid={fieldErrors.oldPassword ? "true" : "false"}
+                  required
+                />
+                <button type="button" className="profile-eye-btn" onClick={() => setShowOldPassword((prev) => !prev)}>
+                  {showOldPassword ? <FaEyeSlash /> : <FaEye />}
+                </button>
+              </div>
+              {fieldErrors.oldPassword ? <p className="field-error">{fieldErrors.oldPassword}</p> : null}
+            </div>
+
+            <div>
+              <label className="required-label profile-input-label">New Password</label>
+              <div className="profile-password-wrap">
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  className={`profile-input ${fieldErrors.newPassword ? "input-invalid" : ""}`}
+                  value={newPassword}
+                  onChange={(e) => {
+                    setNewPassword(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, newPassword: "" }));
+                  }}
+                  data-invalid={fieldErrors.newPassword ? "true" : "false"}
+                  required
+                />
+                <button type="button" className="profile-eye-btn" onClick={() => setShowNewPassword((prev) => !prev)}>
+                  {showNewPassword ? <FaEyeSlash /> : <FaEye />}
+                </button>
+              </div>
+              {fieldErrors.newPassword ? <p className="field-error">{fieldErrors.newPassword}</p> : null}
+            </div>
+
+            <div>
+              <label className="required-label profile-input-label">Confirm New Password</label>
+              <div className="profile-password-wrap">
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  className={`profile-input ${fieldErrors.confirmPassword ? "input-invalid" : ""}`}
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, confirmPassword: "" }));
+                  }}
+                  data-invalid={fieldErrors.confirmPassword ? "true" : "false"}
+                  required
+                />
+                <button
+                  type="button"
+                  className="profile-eye-btn"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                >
+                  {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
+                </button>
+              </div>
+              {fieldErrors.confirmPassword ? <p className="field-error">{fieldErrors.confirmPassword}</p> : null}
+            </div>
+
+            <button type="submit" className="profile-primary-btn" disabled={pwdLoading}>
               {pwdLoading ? "Updating..." : "Change Password"}
             </button>
           </form>
 
-          {pendingPasswordOtp && (
-            <form onSubmit={handleConfirmPasswordOtp} style={{ marginTop: "1rem" }}>
-              <label className="small-muted required-label" style={{ color: mutedColor }}>
-                Email OTP
-              </label>
+          {pendingPasswordOtp ? (
+            <form ref={otpFormRef} onSubmit={handleConfirmPasswordOtp} noValidate className="profile-otp-form">
+              <label className="required-label profile-input-label">Email OTP</label>
               <input
-                className="input mt-1"
+                className={`profile-input profile-otp-input ${fieldErrors.otp ? "input-invalid" : ""}`}
                 value={passwordOtp}
-                onChange={(e) => setPasswordOtp(e.target.value)}
+                onChange={(e) => {
+                  setPasswordOtp(e.target.value);
+                  setFieldErrors((prev) => ({ ...prev, otp: "" }));
+                }}
                 placeholder="Enter 6-digit OTP"
                 inputMode="numeric"
                 maxLength={6}
-                style={{
-                  background: softBg,
-                  color: textColor,
-                  borderColor,
-                  letterSpacing: "0.3rem",
-                  textAlign: "center",
-                  fontWeight: 700,
-                }}
+                data-invalid={fieldErrors.otp ? "true" : "false"}
+                required
               />
-              <button
-                type="submit"
-                style={{
-                  width: "100%",
-                  marginTop: "1rem",
-                  padding: "0.8rem",
-                  borderRadius: 10,
-                  border: "1px solid #6759FF",
-                  background: softBg,
-                  color: textColor,
-                  fontWeight: 600,
-                  cursor: otpLoading ? "not-allowed" : "pointer",
-                  opacity: otpLoading ? 0.75 : 1,
-                }}
-                disabled={otpLoading}
-              >
+              {fieldErrors.otp ? <p className="field-error">{fieldErrors.otp}</p> : null}
+              <button type="submit" className="profile-secondary-btn" disabled={otpLoading}>
                 {otpLoading ? "Verifying..." : "Confirm OTP"}
               </button>
             </form>
-          )}
-        </div>
+          ) : null}
+        </section>
 
-        <div style={styles.dangerZone}>
-          <h3 style={styles.dangerTitle}>Account</h3>
+        <section className="profile-section-card profile-account-card">
+          <div>
+            <p className="profile-section-heading">Account</p>
+            <p className="profile-account-subtitle">Use logout safely to protect your account on shared devices.</p>
+          </div>
+          <button type="button" className="profile-logout-btn" onClick={() => setShowLogoutConfirm(true)}>
+            <FaSignOutAlt /> Logout
+          </button>
+        </section>
 
-          {!showLogoutConfirm ? (
-            <button
-              style={styles.logoutBtn}
-              onClick={() => setShowLogoutConfirm(true)}
-            >
-              Logout
-            </button>
-          ) : (
-            <div style={styles.confirmBox}>
-              <p style={styles.confirmText}>Are you sure you want to logout?</p>
-              <div style={styles.confirmBtns}>
-                <button
-                  style={styles.confirmLogoutBtn}
-                  onClick={handleLogout}
-                >
-                  Yes, Logout
-                </button>
-                <button
-                  style={styles.cancelBtn}
-                  onClick={() => setShowLogoutConfirm(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div style={{ ...styles.footer, background: softBg, color: mutedColor }}>
-          <p>Meeting Platform - AI Meeting Assistant</p>
-          <p style={styles.version}>Version 1.0.0</p>
-        </div>
+        <footer className="profile-footer-links">
+          <a href="/support">Help & Support</a>
+          <span><FaCircle /></span>
+          <a href="/privacy">Privacy Policy</a>
+          <span><FaCircle /></span>
+          <a href="/contact">Contact Us</a>
+        </footer>
       </div>
+
+      <AppPopup
+        open={showLogoutConfirm}
+        title="Leave your account session?"
+        message="Are you sure you want to logout from this device?"
+        confirmLabel="Yes, Logout"
+        cancelLabel="No, Stay"
+        confirmVariant="danger"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </div>
   );
 }
-
-const styles = {
-  container: {
-    paddingTop: "5.75rem",
-    minHeight: "calc(100vh - 60px)",
-    display: "flex",
-    justifyContent: "center",
-    paddingBottom: "2rem",
-    paddingLeft: "1rem",
-    paddingRight: "1rem",
-    width: "100%",
-  },
-  profileCard: {
-    borderRadius: 16,
-    width: "100%",
-    maxWidth: 560,
-    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-    overflow: "hidden",
-  },
-  loadingCard: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "1rem",
-    padding: "3rem",
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 16,
-    boxShadow: "0 8px 20px rgba(0,0,0,0.08)",
-  },
-  spinner: {
-    width: 40,
-    height: 40,
-    border: "4px solid #f3f3f3",
-    borderTop: "4px solid #6759FF",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-  },
-  header: {
-    background: "linear-gradient(135deg, #6759FF, #A79BFF)",
-    padding: "2rem",
-    textAlign: "center",
-    color: "#fff",
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontSize: "1.8rem",
-    fontWeight: "bold",
-    color: "#fff",
-    margin: "0 auto 1rem",
-    border: "4px solid rgba(255,255,255,0.3)",
-  },
-  userName: {
-    margin: 0,
-    fontSize: "1.5rem",
-    fontWeight: 600,
-  },
-  userEmail: {
-    margin: "0.5rem 0 0",
-    opacity: 0.9,
-    fontSize: "0.9rem",
-    overflowWrap: "anywhere",
-  },
-  errorAlert: {
-    background: "#ffe5e5",
-    color: "#ff3b3b",
-    padding: "0.8rem 1rem",
-    textAlign: "center",
-    fontSize: "0.9rem",
-  },
-  section: {
-    padding: "1.5rem",
-  },
-  sectionTitle: {
-    fontSize: "0.85rem",
-    textTransform: "uppercase",
-    color: "#888",
-    letterSpacing: "0.5px",
-    marginBottom: "1rem",
-    fontWeight: 600,
-  },
-  responsiveRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: "0.75rem",
-    padding: "0.8rem 0",
-  },
-  infoLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-    fontSize: "0.95rem",
-  },
-  infoIcon: {
-    minWidth: 26,
-    padding: "0.18rem 0.35rem",
-    borderRadius: 8,
-    background: "rgba(103, 89, 255, 0.12)",
-    color: "#6759FF",
-    fontSize: "0.8rem",
-    fontWeight: 700,
-    textAlign: "center",
-  },
-  infoValue: {
-    fontWeight: 500,
-  },
-  settingLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.5rem",
-  },
-  settingIcon: {
-    minWidth: 26,
-    padding: "0.18rem 0.35rem",
-    borderRadius: 8,
-    background: "rgba(103, 89, 255, 0.12)",
-    color: "#6759FF",
-    fontSize: "0.8rem",
-    fontWeight: 700,
-    textAlign: "center",
-  },
-  toggle: {
-    position: "relative",
-    display: "inline-block",
-    width: 48,
-    height: 26,
-  },
-  toggleInput: {
-    opacity: 0,
-    width: 0,
-    height: 0,
-  },
-  toggleSlider: {
-    position: "absolute",
-    cursor: "pointer",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "#ccc",
-    transition: "0.3s",
-    borderRadius: 26,
-  },
-  actionsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-    gap: "0.8rem",
-  },
-  actionBtn: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "1rem 0.5rem",
-    borderRadius: 12,
-    cursor: "pointer",
-    fontSize: "0.8rem",
-    transition: "all 0.2s",
-  },
-  actionIcon: {
-    fontSize: "0.85rem",
-    fontWeight: 700,
-    color: "#6759FF",
-  },
-  dangerZone: {
-    padding: "1.5rem",
-  },
-  dangerTitle: {
-    fontSize: "0.85rem",
-    textTransform: "uppercase",
-    color: "#888",
-    letterSpacing: "0.5px",
-    marginBottom: "1rem",
-    fontWeight: 600,
-  },
-  logoutBtn: {
-    width: "100%",
-    padding: "0.9rem",
-    borderRadius: 10,
-    background: "#ff4757",
-    color: "#fff",
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: "1rem",
-  },
-  confirmBox: {
-    background: "#fff5f5",
-    padding: "1rem",
-    borderRadius: 10,
-    border: "1px solid #ff4757",
-  },
-  confirmText: {
-    margin: "0 0 1rem",
-    color: "#333",
-    textAlign: "center",
-  },
-  confirmBtns: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "0.8rem",
-  },
-  confirmLogoutBtn: {
-    flex: 1,
-    minWidth: 140,
-    padding: "0.7rem",
-    borderRadius: 8,
-    background: "#ff4757",
-    color: "#fff",
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-  cancelBtn: {
-    flex: 1,
-    minWidth: 140,
-    padding: "0.7rem",
-    borderRadius: 8,
-    background: "#fff",
-    color: "#666",
-    border: "1px solid #ddd",
-    cursor: "pointer",
-    fontWeight: 600,
-  },
-  footer: {
-    padding: "1.5rem",
-    textAlign: "center",
-    fontSize: "0.85rem",
-  },
-  version: {
-    margin: "0.3rem 0 0",
-    fontSize: "0.75rem",
-  },
-};
-
