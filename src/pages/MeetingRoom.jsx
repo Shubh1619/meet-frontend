@@ -57,6 +57,7 @@ export default function MeetingRoom() {
   const [previewMicOn, setPreviewMicOn] = useState(false);
   const [previewCamOn, setPreviewCamOn] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const cancelLeaveBtnRef = useRef(null);
   const previewVideoRef = useRef(null);
   const toast = useToast();
 
@@ -691,9 +692,22 @@ export default function MeetingRoom() {
     leaveMeeting(true, "end_all");
   }, [leaveMeeting]);
 
+  const confirmHostLeaveOnly = useCallback(() => {
+    setLeaveConfirmOpen(false);
+    leaveMeeting(true, "leave_only");
+  }, [leaveMeeting]);
+
   const cancelHostLeave = useCallback(() => {
     setLeaveConfirmOpen(false);
   }, []);
+
+  useEffect(() => {
+    if (!leaveConfirmOpen) return;
+    const focusTimeout = window.setTimeout(() => {
+      cancelLeaveBtnRef.current?.focus();
+    }, 0);
+    return () => window.clearTimeout(focusTimeout);
+  }, [leaveConfirmOpen]);
 
   const sendChatMessage = (message) => {
     const trimmedMessage = message.trim();
@@ -1739,17 +1753,26 @@ export default function MeetingRoom() {
             <div className="recording-modal leave-modal">
               <h3>Leave Meeting?</h3>
               <p className="recording-description">
-                Are you sure you want to leave the meeting?
+                Choose how you want to leave the meeting.
               </p>
-              <p className="leave-modal-note">
-                Yes- End meeting for all participants
-              </p>
-              <p className="leave-modal-note">
-                No- Stay in the meeting
-              </p>
-              <div className="recording-actions">
-                <button className="recording-cancel" onClick={cancelHostLeave}>No</button>
-                <button className="leave-confirm-btn" onClick={confirmHostLeaveForAll}>Yes</button>
+              <div className="leave-modal-notes">
+                <p className="leave-modal-note">
+                  <strong>Leave Meeting:</strong> You will leave, others will continue.
+                </p>
+                <p className="leave-modal-note">
+                  <strong>End Meeting:</strong> All participants will be disconnected.
+                </p>
+              </div>
+              <div className="recording-actions leave-modal-actions">
+                <button ref={cancelLeaveBtnRef} className="recording-cancel leave-btn-cancel" onClick={cancelHostLeave}>
+                  <span aria-hidden="true">↩️</span> Cancel
+                </button>
+                <button className="recording-start leave-btn-primary" onClick={confirmHostLeaveOnly}>
+                  <span aria-hidden="true">🚪</span> Leave Meeting (Host Only)
+                </button>
+                <button className="leave-confirm-btn leave-btn-danger" onClick={confirmHostLeaveForAll}>
+                  <span aria-hidden="true">❌</span> End Meeting for All
+                </button>
               </div>
             </div>
           </div>

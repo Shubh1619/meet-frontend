@@ -1677,10 +1677,21 @@
   max-width: 460px;
 }
 
+.leave-modal-notes {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
 .leave-modal-note {
-  margin: 6px 0 0;
+  margin: 0;
+  padding: 0.58rem 0.65rem;
+  border-radius: 0.62rem;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.25);
   color: #475569;
   font-size: 0.92rem;
+  line-height: 1.4;
 }
 
 .leave-confirm-btn {
@@ -1696,6 +1707,53 @@
 
 .leave-confirm-btn:hover {
   opacity: 0.95;
+}
+
+.leave-modal-actions {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.leave-btn-cancel,
+.leave-btn-primary,
+.leave-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  flex: 1 1 12rem;
+  font-size: 0.9rem;
+  transform: translateY(0);
+  transition: transform 0.16s ease, opacity 0.16s ease, box-shadow 0.16s ease;
+}
+
+.leave-btn-cancel:focus-visible,
+.leave-btn-primary:focus-visible,
+.leave-btn-danger:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.45);
+  outline-offset: 2px;
+}
+
+.leave-btn-cancel:hover,
+.leave-btn-primary:hover,
+.leave-btn-danger:hover {
+  transform: translateY(-1px);
+}
+
+.leave-btn-cancel:active,
+.leave-btn-primary:active,
+.leave-btn-danger:active {
+  transform: translateY(0);
+}
+
+.leave-btn-primary {
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.24);
+}
+
+.leave-btn-danger {
+  box-shadow: 0 8px 20px rgba(220, 38, 38, 0.24);
 }
 
 .recording-share {
@@ -1724,6 +1782,10 @@
   .recording-start,
   .recording-share {
     width: 100%;
+  }
+
+  .leave-modal-actions {
+    gap: 0.55rem;
   }
 }
 
