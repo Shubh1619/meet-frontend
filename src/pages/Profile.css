@@ -1,5 +1,5 @@
 .profile-page {
-  padding: 5.8rem 1rem 2rem;
+  padding: clamp(5.3rem, 7vw, 5.8rem) var(--layout-gutter, 1rem) 2rem;
   min-height: calc(100vh - 60px);
   background:
     radial-gradient(circle at 15% 10%, rgba(59, 130, 246, 0.11), transparent 42%),
@@ -16,7 +16,7 @@
 }
 
 .profile-shell {
-  width: min(980px, 100%);
+  width: min(62rem, 100%);
   margin: 0 auto;
   display: grid;
   gap: 1rem;
@@ -41,7 +41,7 @@
 .profile-header-card {
   position: relative;
   overflow: hidden;
-  padding: 1.35rem;
+  padding: clamp(1rem, 1.6vw, 1.35rem);
   display: grid;
   gap: 1rem;
   background:
@@ -83,8 +83,8 @@
 }
 
 .profile-avatar {
-  width: 100px;
-  height: 100px;
+  width: clamp(5rem, 8vw, 6.25rem);
+  height: clamp(5rem, 8vw, 6.25rem);
   border-radius: 999px;
   border: 3px solid rgba(255, 255, 255, 0.4);
   margin: 0 auto;
@@ -264,7 +264,7 @@
 }
 
 .profile-section-card {
-  padding: 1.05rem;
+  padding: clamp(0.9rem, 1.5vw, 1.1rem);
 }
 
 .profile-section-heading {

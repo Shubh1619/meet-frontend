@@ -2,9 +2,10 @@
 
 .dashboard-container {
   min-height: calc(100vh - 60px);
-  padding: 5.75rem 1rem 2rem;
+  padding: clamp(5.25rem, 7vw, 5.75rem) var(--layout-gutter, 1rem) 2rem;
   width: 100%;
   transition: background 0.3s ease;
+  overflow-x: clip;
 }
 
 .dashboard-container.light {
@@ -19,8 +20,8 @@
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 1.5rem;
-  max-width: 1400px;
+  gap: clamp(1rem, 1.6vw, 1.75rem);
+  max-width: var(--layout-max-width, 1320px);
   margin: 0 auto;
   width: 100%;
 }
@@ -46,8 +47,8 @@
 
 @media (min-width: 1024px) {
   .dashboard-container {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
+    padding-left: var(--layout-gutter, 1.5rem);
+    padding-right: var(--layout-gutter, 1.5rem);
   }
   
   .dashboard-grid {
@@ -58,9 +59,10 @@
 /* Card styling */
 .dashboard-card {
   border-radius: 1rem;
-  padding: 1.25rem;
+  padding: clamp(1rem, 1.8vw, 1.4rem);
   box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
   transition: box-shadow 0.2s ease, transform 0.2s ease;
+  min-width: 0;
 }
 
 @media (min-width: 768px) {
@@ -213,8 +215,8 @@
 
 .notes-textarea {
   width: 100%;
-  min-height: 50px;
-  max-height: 50px;
+  min-height: 3.2rem;
+  max-height: 3.2rem;
   padding: 0.75rem;
   border-radius: 12px;
   overflow-y: auto;
@@ -226,8 +228,8 @@
 
 @media (min-width: 768px) {
   .notes-textarea {
-    min-height: 80px;
-    max-height: 80px;
+    min-height: 5rem;
+    max-height: 5rem;
     padding: 1rem;
     font-size: 1rem;
   }
