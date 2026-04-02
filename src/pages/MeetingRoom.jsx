@@ -63,7 +63,8 @@ export default function MeetingRoom() {
 
   const resolveWsBaseUrl = useCallback(() => {
     const rawWs = (import.meta.env.VITE_WS_URL || "").trim();
-    const rawApi = (import.meta.env.VITE_API_URL || "").trim();
+    const rawApiEnv = (import.meta.env.VITE_API_URL || "").trim();
+    const rawApi = (API_BASE || rawApiEnv || "").trim();
 
     if (rawWs) {
       if (rawWs.startsWith("ws://") || rawWs.startsWith("wss://")) {
