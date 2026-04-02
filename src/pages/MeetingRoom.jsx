@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FaUsers, FaHourglassHalf, FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaDesktop, FaRecordVinyl, FaClosedCaptioning, FaComment, FaSignOutAlt } from "react-icons/fa";
+import { FaUsers, FaHourglassHalf, FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaDesktop, FaRecordVinyl, FaClosedCaptioning, FaComment, FaSignOutAlt, FaChevronUp, FaChevronDown } from "react-icons/fa";
 import ControlsBar from "./ControlsBar";
 import ChatSidebar from "./ChatSidebar";
 import RecordingModal from "./RecordingModal";
@@ -53,6 +53,7 @@ export default function MeetingRoom() {
   const [captions, setCaptions] = useState({});
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
   const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 767);
+  const [participantPage, setParticipantPage] = useState(0);
   const [previewStream, setPreviewStream] = useState(null);
   const [previewMicOn, setPreviewMicOn] = useState(false);
   const [previewCamOn, setPreviewCamOn] = useState(false);
@@ -1626,6 +1627,13 @@ export default function MeetingRoom() {
   }, [captionsEnabled, activeSpeakerId]);
 
   const localParticipant = participants.find((participant) => participant.id === "you");
+  const participantsPerPage = 8;
+  const totalParticipantPages = Math.max(1, Math.ceil(participants.length / participantsPerPage));
+  const pagedParticipants = participants.slice(
+    participantPage * participantsPerPage,
+    participantPage * participantsPerPage + participantsPerPage
+  );
+  const activeGridParticipants = pinnedParticipantId ? participants : pagedParticipants;
   const waitingCount = waitingUsers.length;
   const canManageWaitingRoom = canAdminControl || isHostUser;
   const attendeeList = participants
@@ -1643,6 +1651,10 @@ export default function MeetingRoom() {
       ...participant,
       serial: index + 1,
     }));
+
+  useEffect(() => {
+    setParticipantPage((prev) => Math.min(prev, Math.max(0, totalParticipantPages - 1)));
+  }, [totalParticipantPages]);
 
   const downloadRecording = useCallback(async () => {
     if (!recordedBlobUrl) return;
@@ -1900,8 +1912,8 @@ export default function MeetingRoom() {
 
         {/* Main Content */}
         <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
-          <div id="videos" className={`participant-grid participants-${Math.min(participants.length || 1, 6)}`}>
-            {participants
+          <div id="videos" className={`participant-grid participants-${Math.min(activeGridParticipants.length || 1, 8)}`}>
+            {activeGridParticipants
               .filter((p) => !pinnedParticipantId || p.id === pinnedParticipantId)
               .map((p) => (
                 <VideoTile
@@ -1915,6 +1927,33 @@ export default function MeetingRoom() {
                 />
               ))}
           </div>
+          {!pinnedParticipantId && totalParticipantPages > 1 && (
+            <div className="participant-page-nav" aria-label="Participant pages">
+              <button
+                type="button"
+                className="participant-page-btn"
+                onClick={() => setParticipantPage((prev) => Math.max(0, prev - 1))}
+                disabled={participantPage === 0}
+                aria-label="Previous participant page"
+                title="Previous participants"
+              >
+                <FaChevronUp />
+              </button>
+              <span className="participant-page-indicator">
+                {participantPage + 1} / {totalParticipantPages}
+              </span>
+              <button
+                type="button"
+                className="participant-page-btn"
+                onClick={() => setParticipantPage((prev) => Math.min(totalParticipantPages - 1, prev + 1))}
+                disabled={participantPage >= totalParticipantPages - 1}
+                aria-label="Next participant page"
+                title="Next participants"
+              >
+                <FaChevronDown />
+              </button>
+            </div>
+          )}
           <div id="pinned-column">
             {participants
               .filter((p) => pinnedParticipantId && p.id !== pinnedParticipantId)
