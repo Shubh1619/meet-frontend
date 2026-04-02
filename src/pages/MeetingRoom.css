@@ -391,40 +391,6 @@
   transform: translateY(0);
 }
 
-@media (prefers-color-scheme: dark) {
-  .setup-join-card {
-    background: #1e293b;
-  }
-
-  .setup-header {
-    background: linear-gradient(to bottom, #1e293b, #0f172a);
-  }
-
-  .setup-header h2 {
-    color: #f1f5f9;
-  }
-
-  .setup-subtitle {
-    color: #94a3b8;
-  }
-
-  .setup-name-label {
-    color: #cbd5e1;
-  }
-
-  .setup-name-input,
-  #nameInput {
-    background: #0f172a;
-    border-color: #334155;
-    color: #f1f5f9;
-  }
-
-  .setup-control-btn {
-    background: #334155;
-    color: #cbd5e1;
-  }
-}
-
 @media (max-width: 640px) {
   .setup-header {
     padding: 1.5rem 1.5rem 0.75rem;
