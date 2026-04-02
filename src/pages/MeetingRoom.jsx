@@ -61,6 +61,39 @@ export default function MeetingRoom() {
   const previewVideoRef = useRef(null);
   const toast = useToast();
 
+  const resolveWsBaseUrl = useCallback(() => {
+    const rawWs = (import.meta.env.VITE_WS_URL || "").trim();
+    const rawApi = (import.meta.env.VITE_API_URL || "").trim();
+
+    if (rawWs) {
+      if (rawWs.startsWith("ws://") || rawWs.startsWith("wss://")) {
+        return rawWs.replace(/\/+$/, "");
+      }
+      if (rawWs.startsWith("http://")) {
+        return rawWs.replace("http://", "ws://").replace(/\/+$/, "");
+      }
+      if (rawWs.startsWith("https://")) {
+        return rawWs.replace("https://", "wss://").replace(/\/+$/, "");
+      }
+    }
+
+    if (rawApi) {
+      if (rawApi.startsWith("http://")) {
+        return rawApi.replace("http://", "ws://").replace(/\/+$/, "");
+      }
+      if (rawApi.startsWith("https://")) {
+        return rawApi.replace("https://", "wss://").replace(/\/+$/, "");
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      return `${protocol}//${window.location.host}`;
+    }
+
+    return "";
+  }, []);
+
   const {
     permissionState,
     setRole,
@@ -859,8 +892,13 @@ export default function MeetingRoom() {
 
   // --- WebSocket ---
   const connectWebSocket = useCallback((room, participantName, hostMode, sessionId = "") => {
-    const WS_SERVER = import.meta.env.VITE_WS_URL;
-    const wsUrl = `${WS_SERVER}/ws/${room}`;
+    const wsBase = resolveWsBaseUrl();
+    const wsUrl = `${wsBase}/ws/${room}`;
+
+    if (!wsBase) {
+      toast.error("Unable to connect: WebSocket server URL is not configured.");
+      return;
+    }
 
     if (wsRef.current) {
       wsRef.current.onclose = null;
@@ -1119,6 +1157,10 @@ export default function MeetingRoom() {
       }
     };
 
+    socket.onerror = () => {
+      toast.error("Realtime connection failed. Please refresh and try again.");
+    };
+
     socket.onclose = () => {
       if (captionsEnabled) setCaptionsEnabled(false);
       if (isRecording) setIsRecording(false);
@@ -1133,7 +1175,7 @@ export default function MeetingRoom() {
         }
       }, 5000);
     };
-  }, [applyPermissionUpdate, captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting, setRole, upsertParticipantPresence, profileAvatarUrl]);
+  }, [applyPermissionUpdate, captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting, setRole, upsertParticipantPresence, profileAvatarUrl, resolveWsBaseUrl, toast]);
 
   useEffect(() => {
     reconnectFnRef.current = connectWebSocket;
