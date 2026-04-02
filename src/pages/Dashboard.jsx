@@ -234,7 +234,10 @@ export default function Dashboard() {
             <strong>Quick Actions</strong>
             <div className="actions-buttons">
               <ActionButton onClick={() => (window.location.href = "/instant")}>Instant Meeting</ActionButton>
-              <ActionButton variant="ghost" onClick={() => (window.location.href = "/schedule")}>
+              <ActionButton
+                variant="ghost"
+                onClick={() => nav("/schedule", { state: { selectedDate } })}
+              >
                 Schedule Meeting
               </ActionButton>
             </div>

@@ -10,7 +10,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import { DatePicker, TimePicker } from "@mui/x-date-pickers";
 import dayjs from "dayjs";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { apiPost } from "../api";
 
@@ -25,6 +25,12 @@ const theme = createTheme({
 
 export default function ScheduleMeeting() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const preselectedDate = location.state?.selectedDate;
+  const initialDate = preselectedDate && dayjs(preselectedDate).isValid()
+    ? dayjs(preselectedDate)
+    : dayjs();
 
   // Auth check
   useEffect(() => {
@@ -47,7 +53,7 @@ export default function ScheduleMeeting() {
   const [agenda, setAgenda] = useState("");
   const [participants, setParticipants] = useState("");
 
-  const [date, setDate] = useState(dayjs());
+  const [date, setDate] = useState(initialDate);
   const [startTime, setStartTime] = useState(dayjs());
   const [endTime, setEndTime] = useState(dayjs().add(1, "hour"));
 
