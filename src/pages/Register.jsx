@@ -51,9 +51,9 @@ export default function Register() {
         throw new Error(data.detail || "Registration failed");
       }
 
+      sessionStorage.setItem("pending_verification_email", email.trim().toLowerCase());
       nav("/verify-email", {
         state: {
-          email,
           message:
             data.message ||
             "Registration successful. Enter the OTP sent to your email to verify your account.",

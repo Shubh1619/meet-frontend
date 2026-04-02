@@ -8,7 +8,6 @@ export default function VerifyEmail() {
   const { darkMode } = useDarkMode();
   const nav = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState(location.state?.email || "");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -25,9 +24,6 @@ export default function VerifyEmail() {
     if (location.state?.message) {
       setInfo(location.state.message);
     }
-    if (location.state?.email) {
-      setEmail(location.state.email);
-    }
   }, [location.state]);
 
   async function handleVerify(e) {
@@ -36,10 +32,10 @@ export default function VerifyEmail() {
     setSuccess("");
     setInfo("");
 
-    const cleanedEmail = email.trim().toLowerCase();
+    const cleanedEmail = (sessionStorage.getItem("pending_verification_email") || "").trim().toLowerCase();
     const cleanedOtp = otp.trim();
     if (!cleanedEmail) {
-      setError("Email is required.");
+      setError("Verification session expired. Please register again or request a new OTP.");
       return;
     }
     if (!cleanedOtp) {
@@ -57,6 +53,7 @@ export default function VerifyEmail() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.detail || "Failed to verify email.");
       setSuccess(data.message || "Email verified successfully.");
+      sessionStorage.removeItem("pending_verification_email");
       setTimeout(() => nav("/login"), 1200);
     } catch (err) {
       setError(err.message || "Something went wrong.");
@@ -69,9 +66,9 @@ export default function VerifyEmail() {
     setError("");
     setSuccess("");
     setInfo("");
-    const cleanedEmail = email.trim().toLowerCase();
+    const cleanedEmail = (sessionStorage.getItem("pending_verification_email") || "").trim().toLowerCase();
     if (!cleanedEmail) {
-      setError("Enter your email to resend OTP.");
+      setError("Verification session expired. Please register again.");
       return;
     }
 
@@ -141,21 +138,6 @@ export default function VerifyEmail() {
 
         <form onSubmit={handleVerify}>
           <label className="small-muted" style={{ color: mutedColor }}>
-            Email
-          </label>
-          <input
-            className="input mt-1"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            style={{
-              background: darkMode ? "#0f0f23" : "#fff",
-              color: textColor,
-              borderColor: darkMode ? "#333" : "#ddd",
-            }}
-          />
-
-          <label className="small-muted mt-1" style={{ color: mutedColor }}>
             OTP
           </label>
           <input
