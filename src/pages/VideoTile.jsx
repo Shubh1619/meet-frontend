@@ -54,9 +54,20 @@ const VideoTile = ({
   // Attach stream to video element
   useEffect(() => {
     if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(e => console.log('Video play error:', e));
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
+      }
+      const playVideo = () => {
+        videoRef.current?.play?.().catch((e) => console.log('Video play error:', e));
+      };
+      videoRef.current.onloadedmetadata = playVideo;
+      playVideo();
     }
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.onloadedmetadata = null;
+      }
+    };
   }, [stream]);
   
   // Handle fullscreen
@@ -153,7 +164,7 @@ const VideoTile = ({
           autoPlay
           playsInline
           muted={isLocal}
-          className={`video-tile-video ${(isLocal || isMirrored) ? 'video-tile-video-mirrored' : ''} ${!videoEnabled ? 'is-hidden' : ''}`}
+          className={`video-tile-video ${(isLocal || isMirrored) ? 'video-tile-video-mirrored' : ''}`}
           onDoubleClick={toggleFullscreen}
         />
         

@@ -129,6 +129,7 @@ export default function MeetingRoom() {
   const recordingStreamRef = useRef(null);
   const recordingChunksRef = useRef([]);
   const recordingStartedAtRef = useRef(null);
+  const remoteStreamsRef = useRef({});
 
   useEffect(() => {
     const handleResize = () => {
@@ -715,6 +716,7 @@ export default function MeetingRoom() {
     Object.values(pcsRef.current).forEach((pc) => pc.close());
     pcsRef.current = {};
     iceQueueRef.current = {};
+    remoteStreamsRef.current = {};
 
     if (wsRef.current) {
       wsRef.current.onclose = null;
@@ -841,21 +843,49 @@ export default function MeetingRoom() {
 
     const localTracks = localStreamRef.current?.getTracks?.() || [];
     if (localTracks.length > 0) {
+      console.debug("[WebRTC] adding local tracks to peer", remoteId, localTracks.map((t) => t.kind));
       localTracks.forEach((track) => pc.addTrack(track, localStreamRef.current));
     } else {
       // Allow media-less users to still receive remote audio/video.
       pc.addTransceiver("audio", { direction: "recvonly" });
       pc.addTransceiver("video", { direction: "recvonly" });
+      console.debug("[WebRTC] no local tracks. Added recvonly transceivers for", remoteId);
     }
 
     pc.ontrack = (e) => {
-      const stream = e.streams[0];
+      const incomingStream = e.streams?.[0];
+      let stream = incomingStream;
+      if (!stream) {
+        if (!remoteStreamsRef.current[remoteId]) {
+          remoteStreamsRef.current[remoteId] = new MediaStream();
+        }
+        stream = remoteStreamsRef.current[remoteId];
+      } else {
+        remoteStreamsRef.current[remoteId] = incomingStream;
+      }
+
+      if (e.track && !stream.getTracks().some((track) => track.id === e.track.id)) {
+        stream.addTrack(e.track);
+      }
+
+      const videoTrackCount = stream.getVideoTracks().length;
+      const audioTrackCount = stream.getAudioTracks().length;
       const nextAudioEnabled = typeof audioEnabled === "boolean"
         ? audioEnabled
-        : (stream.getAudioTracks()[0]?.enabled ?? true);
+        : (audioTrackCount > 0 ? (stream.getAudioTracks()[0]?.enabled ?? true) : false);
       const nextVideoEnabled = typeof videoEnabled === "boolean"
         ? videoEnabled
-        : (stream.getVideoTracks()[0]?.enabled ?? true);
+        : (videoTrackCount > 0 ? true : false);
+
+      console.debug("[WebRTC:ontrack]", {
+        from: remoteId,
+        kind: e.track?.kind,
+        streamId: stream.id,
+        audioTrackCount,
+        videoTrackCount,
+        nextAudioEnabled,
+        nextVideoEnabled,
+      });
 
       setParticipants((prev) => {
         const exists = prev.find((p) => p.id === remoteId);
@@ -884,6 +914,7 @@ export default function MeetingRoom() {
 
     pc.onicecandidate = (e) => {
       if (e.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+        console.debug("[WebRTC] sending ICE candidate", { to: remoteId, from: myId.current });
         wsRef.current.send(JSON.stringify({ type: "candidate", candidate: e.candidate, from: myId.current, to: remoteId }));
       }
     };
@@ -998,6 +1029,7 @@ export default function MeetingRoom() {
           if (shouldInitiateConnection(msg.id)) {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
+            console.debug("[WebRTC] sending offer", { to: msg.id, from: myId.current });
 
             wsRef.current?.send(JSON.stringify({
               type: "offer",
@@ -1055,6 +1087,7 @@ export default function MeetingRoom() {
 
 
         case "offer": {
+          console.debug("[WebRTC] received offer", { from: msg.from, to: myId.current });
           let offerPc = pcsRef.current[msg.from];
           if (!offerPc) {
             offerPc = createPeerConnection(msg.from, msg.name);
@@ -1078,6 +1111,7 @@ export default function MeetingRoom() {
 
           const answer = await offerPc.createAnswer();
           await offerPc.setLocalDescription(answer);
+          console.debug("[WebRTC] sending answer", { to: msg.from, from: myId.current });
 
           wsRef.current?.send(JSON.stringify({
             type: "answer",
@@ -1088,6 +1122,7 @@ export default function MeetingRoom() {
           break;
         }
         case "answer": {
+          console.debug("[WebRTC] received answer", { from: msg.from, to: myId.current });
           let answerPc = pcsRef.current[msg.from];
           if (!answerPc) {
             answerPc = createPeerConnection(msg.from, msg.name, msg.audioEnabled, msg.videoEnabled);
@@ -1111,6 +1146,7 @@ export default function MeetingRoom() {
           break;
         }
         case "candidate": {
+          console.debug("[WebRTC] received ICE candidate", { from: msg.from, to: myId.current });
           const candidatePc = pcsRef.current[msg.from];
           if (!candidatePc) return;
 
@@ -1152,6 +1188,7 @@ export default function MeetingRoom() {
             delete pcsRef.current[msg.id];
           }
           delete iceQueueRef.current[msg.id];
+          delete remoteStreamsRef.current[msg.id];
           setParticipants((prev) => prev.filter((p) => p.id !== msg.id));
           setPinnedParticipantId((prev) => (prev === msg.id ? null : prev));
           break;
