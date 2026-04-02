@@ -58,9 +58,9 @@ export default function MeetingRoom() {
   const [previewMicOn, setPreviewMicOn] = useState(false);
   const [previewCamOn, setPreviewCamOn] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
-  const [turnWarningShown, setTurnWarningShown] = useState(false);
   const cancelLeaveBtnRef = useRef(null);
   const previewVideoRef = useRef(null);
+  const relayWarningShownRef = useRef(false);
   const toast = useToast();
 
   const buildIceServers = useCallback(() => {
@@ -71,7 +71,16 @@ export default function MeetingRoom() {
     const servers = [
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:global.stun.twilio.com:3478" },
-      {
+    ];
+
+    if (envTurn && envTurnUser && envTurnCredential) {
+      servers.push({
+        urls: envTurn.split(",").map((u) => u.trim()).filter(Boolean),
+        username: envTurnUser,
+        credential: envTurnCredential,
+      });
+    } else {
+      servers.push({
         urls: [
           "turn:openrelay.metered.ca:80?transport=udp",
           "turn:openrelay.metered.ca:80?transport=tcp",
@@ -80,14 +89,6 @@ export default function MeetingRoom() {
         ],
         username: "openrelayproject",
         credential: "openrelayproject",
-      },
-    ];
-
-    if (envTurn && envTurnUser && envTurnCredential) {
-      servers.unshift({
-        urls: envTurn.split(",").map((u) => u.trim()).filter(Boolean),
-        username: envTurnUser,
-        credential: envTurnCredential,
       });
     }
 
@@ -923,6 +924,11 @@ export default function MeetingRoom() {
       console.log("Connection:", remoteId, pc.connectionState);
       if (pc.connectionState === "connected") {
         clearIceRestartTimeout();
+      } else if (pc.connectionState === "failed") {
+        if (!relayWarningShownRef.current) {
+          relayWarningShownRef.current = true;
+          toast.warning("Network relay failed. Configure a working TURN server for reliable video.");
+        }
       } else if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
         scheduleIceRestart();
       }
@@ -1027,14 +1033,10 @@ export default function MeetingRoom() {
         errorCode: event.errorCode,
         errorText: event.errorText,
       });
-      if (!turnWarningShown && Number(event.errorCode) === 701) {
-        setTurnWarningShown(true);
-        toast.warning("Network relay failed. Configure a working TURN server for reliable video.");
-      }
     };
 
     return pc;
-  }, [buildIceServers, myName, getIceTransportPolicy, turnWarningShown, toast]);
+  }, [buildIceServers, myName, getIceTransportPolicy, toast]);
 
   // --- WebSocket ---
   const connectWebSocket = useCallback((room, participantName, hostMode, sessionId = "") => {
