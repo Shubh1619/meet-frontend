@@ -53,6 +53,8 @@ export default function MeetingRoom() {
   const [captions, setCaptions] = useState({});
   const [activeSpeakerId, setActiveSpeakerId] = useState(null);
   const [isMobileView, setIsMobileView] = useState(window.innerWidth <= 767);
+  const [supportsScreenShare, setSupportsScreenShare] = useState(true);
+  const [supportsRecording, setSupportsRecording] = useState(true);
   const [participantPage, setParticipantPage] = useState(0);
   const [previewStream, setPreviewStream] = useState(null);
   const [previewMicOn, setPreviewMicOn] = useState(false);
@@ -178,6 +180,13 @@ export default function MeetingRoom() {
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const canUseDisplayMedia = Boolean(navigator?.mediaDevices?.getDisplayMedia);
+    const canUseMediaRecorder = typeof window !== "undefined" && typeof window.MediaRecorder !== "undefined";
+    setSupportsScreenShare(canUseDisplayMedia);
+    setSupportsRecording(canUseDisplayMedia && canUseMediaRecorder);
   }, []);
 
   useEffect(() => {
@@ -585,6 +594,10 @@ export default function MeetingRoom() {
   }
 
   const toggleScreenShare = useCallback(async () => {
+    if (!supportsScreenShare) {
+      toast.warning("Screen sharing is not supported on this browser/device.");
+      return;
+    }
     if (!canScreenShare) {
       toast.warning("Feature disabled by host.");
       return;
@@ -662,7 +675,7 @@ export default function MeetingRoom() {
       screenStreamRef.current.getTracks().forEach((track) => track.stop());
       screenStreamRef.current = null;
     }
-  }, [canScreenShare, isScreenSharing, myName, setLocalStreamHandler]);
+  }, [supportsScreenShare, canScreenShare, isScreenSharing, myName, setLocalStreamHandler, toast]);
 
   useEffect(() => {
     if (!canScreenShare && isScreenSharing) {
@@ -679,6 +692,10 @@ export default function MeetingRoom() {
   }, [canUseCaptions, captionsEnabled]);
 
   const startRecording = useCallback(async () => {
+    if (!supportsRecording) {
+      toast.warning("Recording is not supported on this browser/device.");
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
       recordingStreamRef.current = stream;
@@ -848,7 +865,7 @@ export default function MeetingRoom() {
 
   const cancelHostLeave = useCallback(() => {
     setLeaveConfirmOpen(false);
-  }, []);
+  }, [supportsRecording, toast]);
 
   useEffect(() => {
     if (!leaveConfirmOpen) return;
@@ -2022,9 +2039,9 @@ export default function MeetingRoom() {
           onGenerateAI={() => generateAISummary()}
           onChat={() => setChatOpen(!chatOpen)}
           onLeave={() => handleLeaveAction()}
-          canShareScreen={canScreenShare}
+          canShareScreen={canScreenShare && supportsScreenShare}
           canCaptions={isLoggedIn && canUseCaptions}
-          canRecord={isLoggedIn && isMobileView}
+          canRecord={isLoggedIn && isMobileView && supportsRecording}
           canGenerateAI={isLoggedIn && isMobileView}
           canAdminControl={canAdminControl}
           mobileIconsOnly={isMobileView}
