@@ -1450,10 +1450,17 @@ export default function MeetingRoom() {
 
   if (setupVisible) {
     const displayName = (isLoggedIn ? profileUser?.name : myName)?.trim() || "Guest";
+    const displayInitials = displayName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() || "")
+      .join("") || "G";
+    const setupAvatarUrl = profileAvatarUrl || (typeof localStorage !== "undefined" ? localStorage.getItem("profile_avatar_data_url") || "" : "");
 
     return (
       <div id="setup" className="meeting-room-shell meeting-room-shell--entry">
-        <div className="setup-container meeting-state-card">
+        <div className="setup-container meeting-state-card setup-join-card">
           <div className="setup-header">
             <h2>Join Meeting</h2>
             <p className="setup-subtitle">Preview your camera and audio before joining.</p>
@@ -1469,8 +1476,17 @@ export default function MeetingRoom() {
               />
               {!previewCamOn && (
                 <div className="setup-preview-overlay">
-                  <FaVideoSlash />
-                  <span>Camera off</span>
+                  <div className="setup-preview-avatar">
+                    {setupAvatarUrl ? (
+                      <img src={setupAvatarUrl} alt={displayName} className="setup-preview-avatar-image" />
+                    ) : (
+                      <span>{displayInitials}</span>
+                    )}
+                  </div>
+                  <div className="setup-preview-camera-off">
+                    <FaVideoSlash />
+                    <span>Camera Off</span>
+                  </div>
                 </div>
               )}
               <div className="setup-preview-footer">
@@ -1491,20 +1507,22 @@ export default function MeetingRoom() {
               onChange={(e) => setMyName(e.target.value)}
             />
           )}
-          <div className="waiting-room-actions">
+          <div className="setup-controls" role="group" aria-label="Preview controls">
             <button
               type="button"
-              className="approve-btn"
+              className={`setup-control-btn ${previewMicOn ? "is-on" : "is-off"}`}
               onClick={() => togglePreviewTrack("audio")}
             >
-              {previewMicOn ? "Mic On" : "Mic Off"}
+              {previewMicOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
+              <span>{previewMicOn ? "Mic On" : "Mic Off"}</span>
             </button>
             <button
               type="button"
-              className="approve-btn"
+              className={`setup-control-btn ${previewCamOn ? "is-on" : "is-off"}`}
               onClick={() => togglePreviewTrack("video")}
             >
-              {previewCamOn ? "Camera On" : "Camera Off"}
+              {previewCamOn ? <FaVideo /> : <FaVideoSlash />}
+              <span>{previewCamOn ? "Camera On" : "Camera Off"}</span>
             </button>
           </div>
           <button
