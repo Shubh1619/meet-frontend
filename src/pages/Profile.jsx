@@ -1,8 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FaEye,
-  FaEyeSlash,
   FaMoon,
   FaBell,
   FaEnvelopeOpenText,
@@ -21,6 +19,7 @@ import { useDarkMode } from "../context/DarkModeContext";
 import { clearAuthSession, getRefreshToken } from "../authSession";
 import { API_BASE } from "../api";
 import { useToast } from "../components/ToastProvider";
+import PasswordInput from "../components/PasswordInput";
 import AppPopup from "../components/AppPopup";
 import { focusFirstInvalidField } from "../utils/formUtils";
 import "./Profile.css";
@@ -92,9 +91,6 @@ export default function Profile() {
   const [pendingPasswordOtp, setPendingPasswordOtp] = useState(false);
   const [passwordOtp, setPasswordOtp] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
-  const [showOldPassword, setShowOldPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [pwdSuccess, setPwdSuccess] = useState("");
   const [pwdError, setPwdError] = useState("");
@@ -599,68 +595,52 @@ export default function Profile() {
           <form ref={passwordFormRef} onSubmit={handleChangePassword} noValidate className="profile-form-grid">
             <div>
               <label className="required-label profile-input-label">Current Password</label>
-              <div className="profile-password-wrap">
-                <input
-                  type={showOldPassword ? "text" : "password"}
-                  className={`profile-input ${fieldErrors.oldPassword ? "input-invalid" : ""}`}
-                  value={oldPassword}
-                  onChange={(e) => {
-                    setOldPassword(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, oldPassword: "" }));
-                  }}
-                  data-invalid={fieldErrors.oldPassword ? "true" : "false"}
-                  required
-                />
-                <button type="button" className="profile-eye-btn" onClick={() => setShowOldPassword((prev) => !prev)}>
-                  {showOldPassword ? <FaEyeSlash /> : <FaEye />}
-                </button>
-              </div>
+              <PasswordInput
+                className={`profile-input ${fieldErrors.oldPassword ? "input-invalid" : ""}`}
+                containerClassName="profile-password-wrap"
+                toggleButtonClassName="profile-eye-btn"
+                value={oldPassword}
+                onChange={(e) => {
+                  setOldPassword(e.target.value);
+                  setFieldErrors((prev) => ({ ...prev, oldPassword: "" }));
+                }}
+                data-invalid={fieldErrors.oldPassword ? "true" : "false"}
+                required
+              />
               {fieldErrors.oldPassword ? <p className="field-error">{fieldErrors.oldPassword}</p> : null}
             </div>
 
             <div>
               <label className="required-label profile-input-label">New Password</label>
-              <div className="profile-password-wrap">
-                <input
-                  type={showNewPassword ? "text" : "password"}
-                  className={`profile-input ${fieldErrors.newPassword ? "input-invalid" : ""}`}
-                  value={newPassword}
-                  onChange={(e) => {
-                    setNewPassword(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, newPassword: "" }));
-                  }}
-                  data-invalid={fieldErrors.newPassword ? "true" : "false"}
-                  required
-                />
-                <button type="button" className="profile-eye-btn" onClick={() => setShowNewPassword((prev) => !prev)}>
-                  {showNewPassword ? <FaEyeSlash /> : <FaEye />}
-                </button>
-              </div>
+              <PasswordInput
+                className={`profile-input ${fieldErrors.newPassword ? "input-invalid" : ""}`}
+                containerClassName="profile-password-wrap"
+                toggleButtonClassName="profile-eye-btn"
+                value={newPassword}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  setFieldErrors((prev) => ({ ...prev, newPassword: "" }));
+                }}
+                data-invalid={fieldErrors.newPassword ? "true" : "false"}
+                required
+              />
               {fieldErrors.newPassword ? <p className="field-error">{fieldErrors.newPassword}</p> : null}
             </div>
 
             <div>
               <label className="required-label profile-input-label">Confirm New Password</label>
-              <div className="profile-password-wrap">
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  className={`profile-input ${fieldErrors.confirmPassword ? "input-invalid" : ""}`}
-                  value={confirmPassword}
-                  onChange={(e) => {
-                    setConfirmPassword(e.target.value);
-                    setFieldErrors((prev) => ({ ...prev, confirmPassword: "" }));
-                  }}
-                  data-invalid={fieldErrors.confirmPassword ? "true" : "false"}
-                  required
-                />
-                <button
-                  type="button"
-                  className="profile-eye-btn"
-                  onClick={() => setShowConfirmPassword((prev) => !prev)}
-                >
-                  {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-                </button>
-              </div>
+              <PasswordInput
+                className={`profile-input ${fieldErrors.confirmPassword ? "input-invalid" : ""}`}
+                containerClassName="profile-password-wrap"
+                toggleButtonClassName="profile-eye-btn"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  setFieldErrors((prev) => ({ ...prev, confirmPassword: "" }));
+                }}
+                data-invalid={fieldErrors.confirmPassword ? "true" : "false"}
+                required
+              />
               {fieldErrors.confirmPassword ? <p className="field-error">{fieldErrors.confirmPassword}</p> : null}
             </div>
 

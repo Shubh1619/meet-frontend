@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
 import ActionButton from "../components/ActionButton";
+import PasswordInput from "../components/PasswordInput";
 import { useDarkMode } from "../context/DarkModeContext";
 import { API_BASE } from "../api";
 import { useToast } from "../components/ToastProvider";
@@ -23,8 +23,6 @@ export default function ResetPassword() {
   const tokenFromUrl = (searchParams.get("token") || "").trim();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -188,34 +186,19 @@ export default function ResetPassword() {
           <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
             New Password
           </label>
-          <div style={{ position: "relative" }}>
-            <input
-              type={showNewPassword ? "text" : "password"}
-              className="input mt-1"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              data-invalid={fieldErrors.newPassword ? "true" : "false"}
-              style={{
-                background: darkMode ? "#0f0f23" : "#fff",
-                color: textColor,
-                borderColor: fieldErrors.newPassword ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
-                paddingRight: "45px",
-              }}
-            />
-            <span
-              onClick={() => setShowNewPassword(!showNewPassword)}
-              style={{
-                position: "absolute",
-                right: 12,
-                top: "50%",
-                transform: "translateY(-50%)",
-                cursor: "pointer",
-                color: mutedColor,
-              }}
-            >
-              {showNewPassword ? <FaEyeSlash /> : <FaEye />}
-            </span>
-          </div>
+          <PasswordInput
+            className="input mt-1"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            data-invalid={fieldErrors.newPassword ? "true" : "false"}
+            aria-invalid={fieldErrors.newPassword ? "true" : "false"}
+            style={{
+              background: darkMode ? "#0f0f23" : "#fff",
+              color: textColor,
+              borderColor: fieldErrors.newPassword ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
+            }}
+            iconClassName={darkMode ? "text-slate-300" : "text-slate-500"}
+          />
           {fieldErrors.newPassword && <div className="field-error">{fieldErrors.newPassword}</div>}
 
           <div style={{ marginTop: "0.5rem" }}>
@@ -245,34 +228,19 @@ export default function ResetPassword() {
           <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
             Confirm New Password
           </label>
-          <div style={{ position: "relative" }}>
-            <input
-              type={showConfirmPassword ? "text" : "password"}
-              className="input mt-1"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              data-invalid={fieldErrors.confirmPassword ? "true" : "false"}
-              style={{
-                background: darkMode ? "#0f0f23" : "#fff",
-                color: textColor,
-                borderColor: fieldErrors.confirmPassword ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
-                paddingRight: "45px",
-              }}
-            />
-            <span
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              style={{
-                position: "absolute",
-                right: 12,
-                top: "50%",
-                transform: "translateY(-50%)",
-                cursor: "pointer",
-                color: mutedColor,
-              }}
-            >
-              {showConfirmPassword ? <FaEyeSlash /> : <FaEye />}
-            </span>
-          </div>
+          <PasswordInput
+            className="input mt-1"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            data-invalid={fieldErrors.confirmPassword ? "true" : "false"}
+            aria-invalid={fieldErrors.confirmPassword ? "true" : "false"}
+            style={{
+              background: darkMode ? "#0f0f23" : "#fff",
+              color: textColor,
+              borderColor: fieldErrors.confirmPassword ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
+            }}
+            iconClassName={darkMode ? "text-slate-300" : "text-slate-500"}
+          />
           {fieldErrors.confirmPassword && <div className="field-error">{fieldErrors.confirmPassword}</div>}
 
           <div style={{ marginTop: "1.2rem" }}>

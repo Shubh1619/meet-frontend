@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
 import ActionButton from "../components/ActionButton";
+import PasswordInput from "../components/PasswordInput";
 import { useDarkMode } from "../context/DarkModeContext";
 import { popAuthMessage, setAuthSession } from "../authSession";
 import { API_BASE } from "../api";
@@ -13,7 +13,6 @@ export default function Login() {
   const { darkMode } = useDarkMode();
   const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [info, setInfo] = useState("");
@@ -297,33 +296,18 @@ export default function Login() {
           {fieldErrors.email && <div className="text-red-500 text-sm mt-1" style={{ color: "#ef4444" }}>{fieldErrors.email}</div>}
 
           <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>Password</label>
-          <div style={{ position: "relative" }}>
-            <input
-              type={showPassword ? "text" : "password"}
-              className={`input mt-1 ${fieldErrors.password ? "border-red-500" : ""}`}
-              value={pass}
-              onChange={(e) => {
-                setPass(e.target.value);
-                clearFieldError("password");
-              }}
-              data-invalid={fieldErrors.password ? "true" : "false"}
-              aria-invalid={fieldErrors.password ? "true" : "false"}
-              style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: fieldErrors.password ? "#ef4444" : (darkMode ? "#333" : "#ddd"), width: "100%", paddingRight: "45px" }}
-            />
-            <span
-              onClick={() => setShowPassword(!showPassword)}
-              style={{
-                position: "absolute",
-                right: 12,
-                top: "50%",
-                transform: "translateY(-50%)",
-                cursor: "pointer",
-                color: mutedColor,
-              }}
-            >
-              {showPassword ? <FaEyeSlash /> : <FaEye />}
-            </span>
-          </div>
+          <PasswordInput
+            className={`input mt-1 ${fieldErrors.password ? "border-red-500" : ""}`}
+            value={pass}
+            onChange={(e) => {
+              setPass(e.target.value);
+              clearFieldError("password");
+            }}
+            data-invalid={fieldErrors.password ? "true" : "false"}
+            aria-invalid={fieldErrors.password ? "true" : "false"}
+            style={{ background: darkMode ? "#0f0f23" : "#fff", color: textColor, borderColor: fieldErrors.password ? "#ef4444" : (darkMode ? "#333" : "#ddd"), width: "100%" }}
+            iconClassName={darkMode ? "text-slate-300" : "text-slate-500"}
+          />
           {fieldErrors.password && <div className="text-red-500 text-sm mt-1" style={{ color: "#ef4444" }}>{fieldErrors.password}</div>}
 
           <div style={{ marginTop: "1.5rem" }}>
