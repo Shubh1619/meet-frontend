@@ -58,10 +58,15 @@ export default function ScheduleMeeting() {
   const [date, setDate] = useState(initialDate);
   const [startTime, setStartTime] = useState(dayjs());
   const [endTime, setEndTime] = useState(dayjs().add(1, "hour"));
+  const now = dayjs();
+  const isSelectedDateToday = date?.isValid?.() && date.isSame(now, "day");
+  const minStartTime = isSelectedDateToday
+    ? now.add(1, "minute").second(0).millisecond(0)
+    : undefined;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const now = dayjs();
+    const currentTime = dayjs();
 
     const combinedStart = dayjs(date)
       .hour(dayjs(startTime).hour())
@@ -85,7 +90,7 @@ export default function ScheduleMeeting() {
       return;
     }
 
-    if (combinedStart.isBefore(now)) {
+    if (!combinedStart.isAfter(currentTime)) {
       toast.warning("You cannot schedule a meeting in the past.");
       return;
     }
@@ -105,17 +110,9 @@ export default function ScheduleMeeting() {
         : [],
     };
 
-    // Debug logging
-    console.log("📅 Date selected:", date.format("YYYY-MM-DD"));
-    console.log("📅 Start time:", startTime.format("HH:mm"));
-    console.log("📅 Combined start:", payload.start_time);
-    console.log("📅 System timezone offset:", new Date().getTimezoneOffset());
-    console.log("📅 Sending payload:", payload);
-
     try {
       const res = await apiPost("/schedule", payload);
       toast.success("Meeting scheduled successfully.");
-      console.log("📅 Backend response:", res);
       navigate("/dashboard");
     } catch (err) {
       toast.error("Failed to schedule meeting.");
@@ -236,12 +233,14 @@ export default function ScheduleMeeting() {
                   label="Start Time"
                   value={startTime}
                   onChange={(v) => setStartTime(v)}
+                  minTime={minStartTime}
                   slotProps={{ textField: { fullWidth: true, size: "small" } }}
                 />
                 <TimePicker
                   label="End Time"
                   value={endTime}
                   onChange={(v) => setEndTime(v)}
+                  minTime={startTime?.isValid?.() ? startTime : minStartTime}
                   slotProps={{ textField: { fullWidth: true, size: "small" } }}
                 />
               </Box>
