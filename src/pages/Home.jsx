@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
+import platformImage from "../assets/platform.png";
 
 export default function Home() {
   const nav = useNavigate();
@@ -216,21 +217,31 @@ export default function Home() {
           {/* Image Box */}
           <div
             style={{
-              height: "clamp(200px, 40vw, 320px)",
-              borderRadius: "16px",
-              background: darkMode ? "linear-gradient(135deg, #16213e, #1a1a2e)" : "linear-gradient(135deg, #A79BFF, #F8F9FF)",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: 600,
-              fontSize: "clamp(0.9rem, 3vw, 1.1rem)",
-              padding: "1rem",
-              textAlign: "center",
+            //   height: "clamp(200px, 40vw, 320px)",
+              // borderRadius: "16px",
+            //   background: darkMode ? "linear-gradient(135deg, #16213e, #1a1a2e)" : "linear-gradient(135deg, #A79BFF, #F8F9FF)",
+            //   boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+            //   display: "flex",
+            //   alignItems: "center",
+            //   justifyContent: "center",
+            //   color: "#fff",
+            //   fontWeight: 600,
+            //   fontSize: "clamp(0.9rem, 3vw, 1.1rem)",
+            //   padding: "1rem",
+            //   textAlign: "center",
+            //   overflow: "hidden",
             }}
           >
-            Meeting Dashboard Illustration
+            <img
+              src={platformImage}
+              alt="Meeting Platform dashboard"
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "contain",
+                borderRadius: "16px",
+              }}
+            />
           </div>
         </section>
 
