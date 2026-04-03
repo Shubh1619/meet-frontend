@@ -25,6 +25,15 @@ export default function Register() {
   const textColor = darkMode ? "#e4e4e7" : "#1E1E2F";
   const mutedColor = darkMode ? "#888" : "#606074";
 
+  const clearFieldError = (field) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
   // If already logged in, redirect to dashboard.
   useEffect(() => {
     if (localStorage.getItem("token")) {
@@ -155,40 +164,46 @@ export default function Register() {
           </div>
         )}
 
-        <form onSubmit={submit} style={{ textAlign: "left" }}>
+        <form onSubmit={submit} noValidate style={{ textAlign: "left" }}>
           <label className="small-muted required-label" style={{ color: mutedColor }}>
             Name
           </label>
           <input
-            className="input mt-1"
+            className={`input mt-1 ${fieldErrors.name ? "border-red-500" : ""}`}
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
+            onChange={(e) => {
+              setName(e.target.value);
+              clearFieldError("name");
+            }}
             data-invalid={fieldErrors.name ? "true" : "false"}
+            aria-invalid={fieldErrors.name ? "true" : "false"}
             style={{
               background: darkMode ? "#0f0f23" : "#fff",
               color: textColor,
-              borderColor: fieldErrors.name ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
+              borderColor: fieldErrors.name ? "#ef4444" : (darkMode ? "#333" : "#ddd"),
             }}
           />
-          {fieldErrors.name && <div className="field-error">{fieldErrors.name}</div>}
+          {fieldErrors.name && <div className="text-red-500 text-sm mt-1" style={{ color: "#ef4444" }}>{fieldErrors.name}</div>}
 
           <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
             Email
           </label>
           <input
-            className="input mt-1"
+            className={`input mt-1 ${fieldErrors.email ? "border-red-500" : ""}`}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearFieldError("email");
+            }}
             data-invalid={fieldErrors.email ? "true" : "false"}
+            aria-invalid={fieldErrors.email ? "true" : "false"}
             style={{
               background: darkMode ? "#0f0f23" : "#fff",
               color: textColor,
-              borderColor: fieldErrors.email ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
+              borderColor: fieldErrors.email ? "#ef4444" : (darkMode ? "#333" : "#ddd"),
             }}
           />
-          {fieldErrors.email && <div className="field-error">{fieldErrors.email}</div>}
+          {fieldErrors.email && <div className="text-red-500 text-sm mt-1" style={{ color: "#ef4444" }}>{fieldErrors.email}</div>}
 
           <label className="small-muted mt-1 required-label" style={{ color: mutedColor }}>
             Password
@@ -196,15 +211,18 @@ export default function Register() {
           <div style={{ position: "relative" }}>
             <input
               type={showPassword ? "text" : "password"}
-              className="input mt-1"
+              className={`input mt-1 ${fieldErrors.password ? "border-red-500" : ""}`}
               value={pass}
-              onChange={(e) => setPass(e.target.value)}
-              required
+              onChange={(e) => {
+                setPass(e.target.value);
+                clearFieldError("password");
+              }}
               data-invalid={fieldErrors.password ? "true" : "false"}
+              aria-invalid={fieldErrors.password ? "true" : "false"}
               style={{
                 background: darkMode ? "#0f0f23" : "#fff",
                 color: textColor,
-                borderColor: fieldErrors.password ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
+                borderColor: fieldErrors.password ? "#ef4444" : (darkMode ? "#333" : "#ddd"),
                 width: "100%",
                 paddingRight: "45px",
               }}
@@ -223,7 +241,7 @@ export default function Register() {
               {showPassword ? <FaEyeSlash /> : <FaEye />}
             </span>
           </div>
-          {fieldErrors.password && <div className="field-error">{fieldErrors.password}</div>}
+          {fieldErrors.password && <div className="text-red-500 text-sm mt-1" style={{ color: "#ef4444" }}>{fieldErrors.password}</div>}
 
           <div style={{ marginTop: "1.5rem" }}>
             <ActionButton type="submit" style={{ width: "100%" }} disabled={loading}>

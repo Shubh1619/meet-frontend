@@ -29,7 +29,6 @@ export default function ForgotPassword() {
 
     const cleaned = email.trim().toLowerCase();
     if (!cleaned) {
-      setError("Email is required.");
       setFieldError("Email is required.");
       focusFirstInvalidField(e.currentTarget);
       return;
@@ -123,23 +122,27 @@ export default function ForgotPassword() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <label className="small-muted required-label" style={{ color: mutedColor }}>
             Email
           </label>
           <input
-            className="input mt-1"
+            className={`input mt-1 ${fieldError ? "border-red-500" : ""}`}
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (fieldError) setFieldError("");
+            }}
             placeholder="you@example.com"
             data-invalid={fieldError ? "true" : "false"}
+            aria-invalid={fieldError ? "true" : "false"}
             style={{
               background: darkMode ? "#0f0f23" : "#fff",
               color: textColor,
-              borderColor: fieldError ? "#dc2626" : (darkMode ? "#333" : "#ddd"),
+              borderColor: fieldError ? "#ef4444" : (darkMode ? "#333" : "#ddd"),
             }}
           />
-          {fieldError && <div className="field-error">{fieldError}</div>}
+          {fieldError && <div className="text-red-500 text-sm mt-1" style={{ color: "#ef4444" }}>{fieldError}</div>}
 
           <div style={{ marginTop: "1.2rem" }}>
             <ActionButton type="submit" style={{ width: "100%" }} disabled={loading}>
