@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export default function Navbar({ authenticated = false }) {
   const nav = useNavigate();
+  const location = useLocation();
   const [openProfile, setOpenProfile] = useState(false);
 
   const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -16,6 +17,11 @@ export default function Navbar({ authenticated = false }) {
     localStorage.removeItem("user");
     nav("/login");
   }
+
+  useEffect(() => {
+    // Keep profile drawer closed when auth state changes or route changes.
+    setOpenProfile(false);
+  }, [authenticated, location.pathname]);
 
   return (
     <>
@@ -41,7 +47,7 @@ export default function Navbar({ authenticated = false }) {
               <button
                 type="button"
                 className="auth-navbar-profile"
-                onClick={() => setOpenProfile(true)}
+                onClick={() => setOpenProfile((prev) => !prev)}
               >
                 <div className="auth-navbar-avatar">{initials}</div>
                 <div className="auth-navbar-meta">

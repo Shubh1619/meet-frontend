@@ -29,9 +29,14 @@ const PasswordInput = forwardRef(function PasswordInput(
     [forwardedRef]
   );
 
-  const inputClassName = useMemo(
-    () => `${className} pr-11`,
-    [className]
+  const inputClassName = useMemo(() => className, [className]);
+  const inputStyle = inputProps.style || {};
+  const mergedInputStyle = useMemo(
+    () => ({
+      ...inputStyle,
+      paddingRight: inputStyle.paddingRight ?? "48px",
+    }),
+    [inputStyle]
   );
 
   const onToggle = useCallback(() => {
@@ -61,26 +66,41 @@ const PasswordInput = forwardRef(function PasswordInput(
   }, []);
 
   return (
-    <div className={`relative ${containerClassName}`}>
+    <div
+      className={containerClassName}
+      style={{ position: "relative", width: "100%" }}
+    >
       <input
         {...inputProps}
         ref={setRefs}
         type={visible ? "text" : "password"}
         className={inputClassName}
+        style={mergedInputStyle}
       />
       <button
         type="button"
         onClick={onToggle}
         aria-label={visible ? hideAriaLabel : showAriaLabel}
         title={visible ? hideAriaLabel : showAriaLabel}
-        className={[
-          "absolute inset-y-0 right-0 inline-flex items-center justify-center px-3",
-          "text-slate-500 transition-colors duration-150 hover:text-slate-700",
-          "focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-r-lg",
-          toggleButtonClassName,
-        ].join(" ")}
+        className={toggleButtonClassName}
+        style={{
+          position: "absolute",
+          top: 0,
+          right: 0,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "44px",
+          height: "100%",
+          border: "none",
+          background: "transparent",
+          color: "#64748b",
+          cursor: "pointer",
+          borderRadius: "6px",
+          padding: 0,
+        }}
       >
-        {visible ? <FiEyeOff className={`h-4 w-4 ${iconClassName}`} /> : <FiEye className={`h-4 w-4 ${iconClassName}`} />}
+        {visible ? <FiEyeOff className={iconClassName} size={18} style={{ display: "block" }} /> : <FiEye className={iconClassName} size={18} style={{ display: "block" }} />}
       </button>
     </div>
   );

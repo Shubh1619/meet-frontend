@@ -14,11 +14,11 @@ const DEFAULT_DURATION = 3500;
 const FADE_MS = 300;
 
 const TYPE_THEME = {
-  primary: "bg-blue-500",
-  success: "bg-green-500",
-  error: "bg-red-500",
-  warning: "bg-yellow-500",
-  default: "bg-gray-800",
+  primary: "#3b82f6",
+  success: "#22c55e",
+  error: "#ef4444",
+  warning: "#f59e0b",
+  default: "#1f2937",
 };
 
 const TYPE_ICON = {
@@ -65,23 +65,39 @@ const ToastItem = memo(function ToastItem({ toast, onRemove }) {
     <div
       role="status"
       aria-live="polite"
-      className={[
-        "pointer-events-auto flex items-center gap-3 rounded-lg px-4 py-3 text-white",
-        "transition-opacity duration-300 transform",
-        visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2",
-        TYPE_THEME[type],
-      ].join(" ")}
+      style={{
+        pointerEvents: "auto",
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        borderRadius: "10px",
+        padding: "12px 16px",
+        color: "#ffffff",
+        background: TYPE_THEME[type],
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(8px)",
+        transition: "opacity 300ms ease, transform 300ms ease",
+      }}
     >
-      <span className="shrink-0 text-sm font-semibold" aria-hidden="true">
+      <span aria-hidden="true" style={{ flexShrink: 0, fontSize: "14px", fontWeight: 700 }}>
         {TYPE_ICON[type]}
       </span>
-      <p className="min-w-0 flex-1 truncate text-sm">{toast.message}</p>
-      <div className="flex shrink-0 items-center gap-2">
+      <p style={{ margin: 0, minWidth: 0, flex: 1, fontSize: "14px", lineHeight: 1.35 }}>{toast.message}</p>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
         {toast.onAction ? (
           <button
             type="button"
             onClick={toast.onAction}
-            className="rounded px-2 py-1 text-xs font-medium text-white/95 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/70"
+            style={{
+              border: "1px solid rgba(255,255,255,0.45)",
+              borderRadius: "6px",
+              padding: "2px 8px",
+              fontSize: "12px",
+              fontWeight: 600,
+              color: "#fff",
+              background: "transparent",
+              cursor: "pointer",
+            }}
           >
             {toast.actionLabel || "Action"}
           </button>
@@ -89,8 +105,16 @@ const ToastItem = memo(function ToastItem({ toast, onRemove }) {
         <button
           type="button"
           onClick={startClose}
-          className="rounded px-1 text-base leading-none text-white/90 hover:text-white focus:outline-none focus:ring-1 focus:ring-white/70"
           aria-label="Close notification"
+          style={{
+            border: "none",
+            background: "transparent",
+            color: "#fff",
+            fontSize: "18px",
+            lineHeight: 1,
+            cursor: "pointer",
+            padding: 0,
+          }}
         >
           {"\u00d7"}
         </button>
@@ -101,7 +125,19 @@ const ToastItem = memo(function ToastItem({ toast, onRemove }) {
 
 export const ToastContainer = memo(function ToastContainer({ toasts, onRemove }) {
   return (
-    <div className="fixed top-4 right-4 z-[9999] flex w-[min(92vw,420px)] flex-col space-y-2 pointer-events-none">
+    <div
+      style={{
+        position: "fixed",
+        top: "16px",
+        right: "16px",
+        zIndex: 9999,
+        width: "min(420px, 92vw)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+        pointerEvents: "none",
+      }}
+    >
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
       ))}
