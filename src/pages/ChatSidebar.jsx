@@ -8,11 +8,14 @@ const ChatSidebar = ({
   setMsgInput,
   sendMessage,
   canPrivateMessage = false,
+  embedded = false,
 }) => {
   if (!isOpen) return null;
 
+  const Root = embedded ? "div" : "aside";
+
   return (
-    <aside className="chat-sidebar">
+    <Root className={`chat-sidebar${embedded ? " chat-sidebar--embedded" : ""}`}>
       <div className="chat-sidebar-header">
         <div>
           <h3>Chat</h3>
@@ -46,7 +49,7 @@ const ChatSidebar = ({
         />
         <button type="button" onClick={sendMessage}>Send</button>
       </div>
-    </aside>
+    </Root>
   );
 };
 

@@ -37,8 +37,7 @@ export default function MeetingRoom() {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isMirrored] = useState(true);
 
-  const [chatOpen, setChatOpen] = useState(false);
-  const [participantsSidebarOpen, setParticipantsSidebarOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState(null);
   const [messages, setMessages] = useState([]);
   const [msgInput, setMsgInput] = useState("");
   const [unreadChatCount, setUnreadChatCount] = useState(0);
@@ -64,6 +63,8 @@ export default function MeetingRoom() {
   const previewVideoRef = useRef(null);
   const relayWarningShownRef = useRef(false);
   const toast = useToast();
+  const isChatPanelOpen = activePanel === "chat";
+  const isAttendeesPanelOpen = activePanel === "attendees";
 
   const buildIceServers = useCallback(() => {
     const envTurn = (import.meta.env.VITE_TURN_URLS || "").trim();
@@ -817,7 +818,7 @@ export default function MeetingRoom() {
     recordingStreamRef.current = null;
 
     localStreamRef.current = null;
-    setChatOpen(false);
+    setActivePanel(null);
     setMessages([]);
     setMsgInput("");
     setRoomVisible(false);
@@ -826,7 +827,6 @@ export default function MeetingRoom() {
     setPreviewMicOn(false);
     setPreviewCamOn(false);
     setParticipants([]);
-    setParticipantsSidebarOpen(false);
     setPinnedParticipantId(null);
     setIsInWaitingRoom(false);
     setUnreadChatCount(0);
@@ -1313,11 +1313,11 @@ export default function MeetingRoom() {
         }
         case "chat-message":
           setMessages((prev) => [...prev, { from: msg.name, text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
-          setUnreadChatCount((count) => (chatOpen ? count : count + 1));
+          setUnreadChatCount((count) => (isChatPanelOpen ? count : count + 1));
           break;
         case "private-message":
           setMessages((prev) => [...prev, { from: msg.name || "Private", text: msg.message, time: new Date().toLocaleTimeString(), own: false }]);
-          setUnreadChatCount((count) => (chatOpen ? count : count + 1));
+          setUnreadChatCount((count) => (isChatPanelOpen ? count : count + 1));
           break;
         case "waiting-user-left":
           setWaitingUsers((prev) => prev.filter((user) => user.client_id !== msg.client_id));
@@ -1373,7 +1373,7 @@ export default function MeetingRoom() {
         }
       }, 5000);
     };
-  }, [applyForcedLocalState, applyPermissionUpdate, captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, chatOpen, leaveMeeting, setRole, upsertParticipantPresence, profileAvatarUrl, resolveWsBaseUrl, toast]);
+  }, [applyForcedLocalState, applyPermissionUpdate, captionsEnabled, isRecording, createPeerConnection, shouldInitiateConnection, isChatPanelOpen, leaveMeeting, setRole, upsertParticipantPresence, profileAvatarUrl, resolveWsBaseUrl, toast]);
 
   useEffect(() => {
     reconnectFnRef.current = connectWebSocket;
@@ -1507,10 +1507,10 @@ export default function MeetingRoom() {
   }, [stopAllMediaTracks]);
 
   useEffect(() => {
-    if (chatOpen) {
+    if (isChatPanelOpen) {
       setUnreadChatCount(0);
     }
-  }, [chatOpen]);
+  }, [isChatPanelOpen]);
 
   useEffect(() => {
     return () => {
@@ -1668,6 +1668,10 @@ export default function MeetingRoom() {
   const activeGridParticipants = pinnedParticipantId ? participants : pagedParticipants;
   const waitingCount = waitingUsers.length;
   const canManageWaitingRoom = canAdminControl || isHostUser;
+
+  const togglePanel = useCallback((panelName) => {
+    setActivePanel((current) => (current === panelName ? null : panelName));
+  }, []);
   const attendeeList = participants
     .map((participant) => ({
       ...participant,
@@ -1869,10 +1873,7 @@ export default function MeetingRoom() {
             <button
               type="button"
               className="participant-circle-btn"
-              onClick={() => {
-                setChatOpen(false);
-                setParticipantsSidebarOpen((prev) => !prev);
-              }}
+              onClick={() => togglePanel("attendees")}
               aria-label="Open attendee list"
             >
               <FaUsers />
@@ -1931,10 +1932,7 @@ export default function MeetingRoom() {
             <div className="waiting-room-actions">
               <button
                 className="approve-btn"
-                onClick={() => {
-                  setChatOpen(false);
-                  setParticipantsSidebarOpen(true);
-                }}
+                onClick={() => setActivePanel("attendees")}
               >
                 Open Waiting List
               </button>
@@ -1942,80 +1940,202 @@ export default function MeetingRoom() {
           </div>
         )}
 
-        {/* Main Content */}
-        <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
-          <div id="videos" className={`participant-grid participants-${Math.min(activeGridParticipants.length || 1, 8)}`}>
-            {activeGridParticipants
-              .filter((p) => !pinnedParticipantId || p.id === pinnedParticipantId)
-              .map((p) => (
-                <VideoTile
-                  key={p.id}
-                  {...p}
-                  captions={captions[p.id]}
-                  isPinned={p.id === pinnedParticipantId}
-                  isFeatured={p.id === pinnedParticipantId}
-                  isMirrored={p.isLocal ? isMirrored : false}
-                  onTogglePin={() => setPinnedParticipantId((current) => (current === p.id ? null : p.id))}
-                />
-              ))}
-          </div>
-          {!pinnedParticipantId && totalParticipantPages > 1 && (
-            <div className="participant-page-nav" aria-label="Participant pages">
-              <button
-                type="button"
-                className="participant-page-btn"
-                onClick={() => setParticipantPage((prev) => Math.max(0, prev - 1))}
-                disabled={participantPage === 0}
-                aria-label="Previous participant page"
-                title="Previous participants"
-              >
-                <FaChevronUp />
-              </button>
-              <span className="participant-page-indicator">
-                {participantPage + 1} / {totalParticipantPages}
-              </span>
-              <button
-                type="button"
-                className="participant-page-btn"
-                onClick={() => setParticipantPage((prev) => Math.min(totalParticipantPages - 1, prev + 1))}
-                disabled={participantPage >= totalParticipantPages - 1}
-                aria-label="Next participant page"
-                title="Next participants"
-              >
-                <FaChevronDown />
-              </button>
+        <div className={`meeting-layout${activePanel ? " has-panel-open" : ""}`}>
+          <div className="meeting-stage">
+            {/* Main Content */}
+            <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
+              <div id="videos" className={`participant-grid participants-${Math.min(activeGridParticipants.length || 1, 8)}`}>
+                {activeGridParticipants
+                  .filter((p) => !pinnedParticipantId || p.id === pinnedParticipantId)
+                  .map((p) => (
+                    <VideoTile
+                      key={p.id}
+                      {...p}
+                      captions={captions[p.id]}
+                      isPinned={p.id === pinnedParticipantId}
+                      isFeatured={p.id === pinnedParticipantId}
+                      isMirrored={p.isLocal ? isMirrored : false}
+                      onTogglePin={() => setPinnedParticipantId((current) => (current === p.id ? null : p.id))}
+                    />
+                  ))}
+              </div>
+              {!pinnedParticipantId && totalParticipantPages > 1 && (
+                <div className="participant-page-nav" aria-label="Participant pages">
+                  <button
+                    type="button"
+                    className="participant-page-btn"
+                    onClick={() => setParticipantPage((prev) => Math.max(0, prev - 1))}
+                    disabled={participantPage === 0}
+                    aria-label="Previous participant page"
+                    title="Previous participants"
+                  >
+                    <FaChevronUp />
+                  </button>
+                  <span className="participant-page-indicator">
+                    {participantPage + 1} / {totalParticipantPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="participant-page-btn"
+                    onClick={() => setParticipantPage((prev) => Math.min(totalParticipantPages - 1, prev + 1))}
+                    disabled={participantPage >= totalParticipantPages - 1}
+                    aria-label="Next participant page"
+                    title="Next participants"
+                  >
+                    <FaChevronDown />
+                  </button>
+                </div>
+              )}
+              <div id="pinned-column">
+                {participants
+                  .filter((p) => pinnedParticipantId && p.id !== pinnedParticipantId)
+                  .map((p) => (
+                    <VideoTile
+                      key={p.id}
+                      {...p}
+                      captions={captions[p.id]}
+                      isPinned={false}
+                      isMirrored={p.isLocal ? isMirrored : false}
+                      onTogglePin={() => setPinnedParticipantId((current) => (current === p.id ? null : p.id))}
+                    />
+                  ))}
+              </div>
             </div>
-          )}
-          <div id="pinned-column">
-            {participants
-              .filter((p) => pinnedParticipantId && p.id !== pinnedParticipantId)
-              .map((p) => (
-                <VideoTile
-                  key={p.id}
-                  {...p}
-                  captions={captions[p.id]}
-                  isPinned={false}
-                  isMirrored={p.isLocal ? isMirrored : false}
-                  onTogglePin={() => setPinnedParticipantId((current) => (current === p.id ? null : p.id))}
-                />
-              ))}
-          </div>
-        </div>
 
-        {/* Participants strip for screen share */}
-        <div id="participants-strip">
-          {isScreenSharing &&
-            participants
-              .filter((p) => !p.isLocal)
-              .map((p) => (
-                <VideoTile
-                  key={p.id}
-                  {...p}
-                  captions={captions[p.id]}
-                  isMirrored={p.isLocal ? isMirrored : false}
-                  onTogglePin={() => setPinnedParticipantId((current) => (current === p.id ? null : p.id))}
+            {/* Participants strip for screen share */}
+            <div id="participants-strip">
+              {isScreenSharing &&
+                participants
+                  .filter((p) => !p.isLocal)
+                  .map((p) => (
+                    <VideoTile
+                      key={p.id}
+                      {...p}
+                      captions={captions[p.id]}
+                      isMirrored={p.isLocal ? isMirrored : false}
+                      onTogglePin={() => setPinnedParticipantId((current) => (current === p.id ? null : p.id))}
+                    />
+                  ))}
+            </div>
+          </div>
+
+          {activePanel && (
+            <aside className="meeting-side-panel" aria-label={isChatPanelOpen ? "Chat panel" : "Attendee list panel"}>
+              {isChatPanelOpen ? (
+                <ChatSidebar
+                  isOpen
+                  embedded
+                  messages={messages}
+                  onClose={() => setActivePanel(null)}
+                  msgInput={msgInput}
+                  setMsgInput={setMsgInput}
+                  sendMessage={() => sendChatMessage(msgInput)}
+                  canPrivateMessage={canPrivateMessage}
                 />
-              ))}
+              ) : (
+                <aside className="participants-sidebar participants-sidebar--docked" aria-label="Attendee list sidebar">
+                  <div className="participants-sidebar-header">
+                    <div>
+                      <h3>Attendees</h3>
+                      <p>{attendeeList.length} in meet</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="participants-sidebar-close"
+                      onClick={() => setActivePanel(null)}
+                      aria-label="Close attendee list"
+                    >
+                      X
+                    </button>
+                  </div>
+                  <div className="participants-section">
+                    <div className="participants-section-title">In Meet ({attendeeList.length})</div>
+                  </div>
+                  <div className="participants-sidebar-list">
+                    {attendeeList.map((participant) => (
+                      <div key={`attendee-${participant.id}`} className="participants-sidebar-item">
+                        <div className="participants-avatar">
+                          {participant.avatarUrl ? (
+                            <img src={participant.avatarUrl} alt={participant.displayName} className="participants-avatar-image" />
+                          ) : (
+                            participant.displayName.slice(0, 1).toUpperCase()
+                          )}
+                        </div>
+                        <div className="participants-meta">
+                          <div className="participants-name">
+                            {participant.displayName}
+                            {participant.id === "you" ? " (You)" : ""}
+                            {participant.role === "host" ? " (Host)" : ""}
+                          </div>
+                          <div className="participants-status">
+                            {participant.audioEnabled ? <FaMicrophone /> : <FaMicrophoneSlash />}
+                            {participant.videoEnabled ? <FaVideo /> : <FaVideoSlash />}
+                          </div>
+                        </div>
+                        {canAdminControl && !participant.isSelf && (
+                          <div className="participants-actions" role="group" aria-label={`Host controls for ${participant.displayName}`}>
+                            <button
+                              type="button"
+                              className="participant-action-btn"
+                              onClick={() => sendHostAction("mute_user", participant.id)}
+                              disabled={!participant.audioEnabled}
+                              title={participant.audioEnabled ? "Mute participant" : "Participant microphone is already off"}
+                              aria-label={`Mute ${participant.displayName}`}
+                            >
+                              <FaMicrophoneSlash />
+                            </button>
+                            <button
+                              type="button"
+                              className="participant-action-btn"
+                              onClick={() => sendHostAction("disable_camera", participant.id)}
+                              disabled={!participant.videoEnabled}
+                              title={participant.videoEnabled ? "Turn camera off" : "Participant camera is already off"}
+                              aria-label={`Turn off camera for ${participant.displayName}`}
+                            >
+                              <FaVideoSlash />
+                            </button>
+                            <button
+                              type="button"
+                              className="participant-action-btn participant-action-btn-danger"
+                              onClick={() => sendHostAction("kick_user", participant.id)}
+                              title="Remove participant"
+                              aria-label={`Remove ${participant.displayName}`}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {canManageWaitingRoom && (
+                    <div className="participants-sidebar-footer">
+                      <div className="participants-section-title">Waiting ({waitingUsers.length})</div>
+                      {waitingUsers.length === 0 && (
+                        <div className="participants-waiting-empty">No join requests pending.</div>
+                      )}
+                      {waitingUsers.length > 0 && (
+                        <div className="participants-waiting-list">
+                          {waitingUsers.map((user) => (
+                            <div key={`waiting-${user.client_id}`} className="participants-waiting-item">
+                              <div>
+                                <div className="waiting-user-name">{user.name || "Guest"}</div>
+                                <div className="waiting-user-subtitle">Requested to join</div>
+                              </div>
+                              <div className="waiting-room-actions">
+                                <button className="approve-btn" onClick={() => approveGuest(user.client_id)}>Approve</button>
+                                <button className="deny-btn" onClick={() => denyGuest(user.client_id)}>Deny</button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </aside>
+              )}
+            </aside>
+          )}
         </div>
 
         {/* Controls */}
@@ -2025,7 +2145,7 @@ export default function MeetingRoom() {
           isSharingScreen={isScreenSharing}
           isRecording={isRecording}
           captionsEnabled={captionsEnabled}
-          chatOpen={chatOpen}
+          chatOpen={isChatPanelOpen}
           unreadChatCount={unreadChatCount}
           onToggleMic={() => toggleMic()}
           onToggleCamera={() => toggleCamera()}
@@ -2050,7 +2170,7 @@ export default function MeetingRoom() {
             setCaptionsEnabled(!captionsEnabled);
           }}
           onGenerateAI={() => generateAISummary()}
-          onChat={() => setChatOpen(!chatOpen)}
+          onChat={() => togglePanel("chat")}
           onLeave={() => handleLeaveAction()}
           canShareScreen={canScreenShare && supportsScreenShare}
           canCaptions={isLoggedIn && canUseCaptions}
@@ -2060,122 +2180,6 @@ export default function MeetingRoom() {
           mobileIconsOnly={isMobileView}
         />
 
-        {/* Chat Sidebar */}
-        <ChatSidebar
-          isOpen={chatOpen}
-          messages={messages}
-          onClose={() => setChatOpen(false)}
-          msgInput={msgInput}
-          setMsgInput={setMsgInput}
-          sendMessage={() => sendChatMessage(msgInput)}
-          canPrivateMessage={canPrivateMessage}
-        />
-
-                {participantsSidebarOpen && (
-          <>
-            <div className="participants-sidebar-backdrop" onClick={() => setParticipantsSidebarOpen(false)} />
-            <aside className="participants-sidebar" aria-label="Attendee list sidebar">
-              <div className="participants-sidebar-header">
-                <div>
-                  <h3>Attendees</h3>
-                  <p>{attendeeList.length} in meet</p>
-                </div>
-                <button
-                  type="button"
-                  className="participants-sidebar-close"
-                  onClick={() => setParticipantsSidebarOpen(false)}
-                  aria-label="Close attendee list"
-                >
-                  X
-                </button>
-              </div>
-              <div className="participants-section">
-                <div className="participants-section-title">In Meet ({attendeeList.length})</div>
-              </div>
-              <div className="participants-sidebar-list">
-                {attendeeList.map((participant) => (
-                  <div key={`attendee-${participant.id}`} className="participants-sidebar-item">
-                    <div className="participants-avatar">
-                      {participant.avatarUrl ? (
-                        <img src={participant.avatarUrl} alt={participant.displayName} className="participants-avatar-image" />
-                      ) : (
-                        participant.displayName.slice(0, 1).toUpperCase()
-                      )}
-                    </div>
-                    <div className="participants-meta">
-                      <div className="participants-name">
-                        {participant.displayName}
-                        {participant.id === "you" ? " (You)" : ""}
-                        {participant.role === "host" ? " (Host)" : ""}
-                      </div>
-                      <div className="participants-status">
-                        {participant.audioEnabled ? <FaMicrophone /> : <FaMicrophoneSlash />}
-                        {participant.videoEnabled ? <FaVideo /> : <FaVideoSlash />}
-                      </div>
-                    </div>
-                    {canAdminControl && !participant.isSelf && (
-                      <div className="participants-actions" role="group" aria-label={`Host controls for ${participant.displayName}`}>
-                        <button
-                          type="button"
-                          className="participant-action-btn"
-                          onClick={() => sendHostAction("mute_user", participant.id)}
-                          disabled={!participant.audioEnabled}
-                          title={participant.audioEnabled ? "Mute participant" : "Participant microphone is already off"}
-                          aria-label={`Mute ${participant.displayName}`}
-                        >
-                          <FaMicrophoneSlash />
-                        </button>
-                        <button
-                          type="button"
-                          className="participant-action-btn"
-                          onClick={() => sendHostAction("disable_camera", participant.id)}
-                          disabled={!participant.videoEnabled}
-                          title={participant.videoEnabled ? "Turn camera off" : "Participant camera is already off"}
-                          aria-label={`Turn off camera for ${participant.displayName}`}
-                        >
-                          <FaVideoSlash />
-                        </button>
-                        <button
-                          type="button"
-                          className="participant-action-btn participant-action-btn-danger"
-                          onClick={() => sendHostAction("kick_user", participant.id)}
-                          title="Remove participant"
-                          aria-label={`Remove ${participant.displayName}`}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {canManageWaitingRoom && (
-                <div className="participants-sidebar-footer">
-                  <div className="participants-section-title">Waiting ({waitingUsers.length})</div>
-                  {waitingUsers.length === 0 && (
-                    <div className="participants-waiting-empty">No join requests pending.</div>
-                  )}
-                  {waitingUsers.length > 0 && (
-                    <div className="participants-waiting-list">
-                      {waitingUsers.map((user) => (
-                        <div key={`waiting-${user.client_id}`} className="participants-waiting-item">
-                          <div>
-                            <div className="waiting-user-name">{user.name || "Guest"}</div>
-                            <div className="waiting-user-subtitle">Requested to join</div>
-                          </div>
-                          <div className="waiting-room-actions">
-                            <button className="approve-btn" onClick={() => approveGuest(user.client_id)}>Approve</button>
-                            <button className="deny-btn" onClick={() => denyGuest(user.client_id)}>Deny</button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </aside>
-          </>
-        )}
         {/* Recording Modal */}
         <RecordingModal
           isOpen={recordingModalOpen}

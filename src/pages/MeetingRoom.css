@@ -426,6 +426,34 @@
 }
 
 /* Main content layout */
+.meeting-layout {
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+  width: 100%;
+}
+
+.meeting-stage {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.meeting-side-panel {
+  width: clamp(300px, 24vw, 320px);
+  min-width: 300px;
+  max-width: 320px;
+  height: calc(100dvh - 210px);
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(16px);
+  overflow: hidden;
+  z-index: 12;
+}
+
 #main-content {
   display: flex;
   gap: 16px;
@@ -443,6 +471,18 @@
 }
 
 @media (max-width: 767px) {
+  .meeting-layout {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .meeting-side-panel {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: min(55vh, 420px);
+  }
+
   #main-content,
   #main-content.pin-active {
     display: flex;
@@ -1259,13 +1299,14 @@
 }
 
 .controls-bar {
-  width: min(100%, 1080px);
+  width: fit-content;
+  max-width: min(100%, 920px);
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
-  padding: 10px;
-  border-radius: 20px;
+  padding: 8px 10px;
+  border-radius: 18px;
   background: rgba(9, 15, 27, 0.84);
   box-shadow: 0 18px 44px rgba(2, 8, 23, 0.36);
   backdrop-filter: blur(16px);
@@ -1273,9 +1314,9 @@
 
 @media (min-width: 768px) {
   .controls-bar {
-    gap: 10px;
-    padding: 12px;
-    border-radius: 24px;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: 20px;
   }
 }
 
@@ -1288,25 +1329,25 @@
 .control-button {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 0.65rem 0.8rem;
+  gap: 6px;
+  padding: 0.58rem 0.72rem;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.06);
   color: #f8fafc;
   box-shadow: none;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 0.75rem;
-  min-height: 44px;
+  min-height: 40px;
 }
 
 @media (min-width: 768px) {
   .control-button {
-    padding: 0.82rem 1rem;
-    font-size: 0.875rem;
+    padding: 0.74rem 0.9rem;
+    font-size: 0.84rem;
     min-height: auto;
-    border-radius: 18px;
+    border-radius: 16px;
   }
 }
 
@@ -1437,6 +1478,21 @@
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
   backdrop-filter: blur(18px);
   overflow: hidden;
+}
+
+.chat-sidebar--embedded {
+  position: static;
+  width: 100%;
+  height: 100%;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 @media (max-width: 767px) {
@@ -1640,28 +1696,26 @@
 
 /* Participants sidebar */
 .participants-sidebar-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(2, 6, 23, 0.38);
-  z-index: 18;
+  display: none;
 }
 
 .participants-sidebar {
-  position: fixed;
-  top: 24px;
-  right: 24px;
-  bottom: 112px;
-  width: min(380px, calc(100vw - 32px));
-  z-index: 19;
+  position: static;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  z-index: 1;
   display: flex;
   flex-direction: column;
+  height: 100%;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
-  backdrop-filter: blur(18px);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
   overflow: hidden;
-  animation: participants-sidebar-enter 0.2s ease;
+  animation: none;
 }
 
 @keyframes participants-sidebar-enter {
@@ -1856,13 +1910,8 @@
 
 @media (max-width: 767px) {
   .participants-sidebar {
-    top: 12px;
-    left: auto;
-    right: 12px;
-    bottom: calc(118px + var(--safe-area-inset-bottom));
-    width: min(340px, calc(100vw - 24px));
     max-height: none;
-    border-radius: 20px;
+    border-radius: 0;
   }
 
   .participants-waiting-item {
