@@ -431,6 +431,7 @@
   gap: 16px;
   min-height: 0;
   width: 100%;
+  position: relative;
 }
 
 .meeting-stage {
@@ -452,6 +453,7 @@
   backdrop-filter: blur(16px);
   overflow: hidden;
   z-index: 12;
+  transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
 #main-content {
@@ -476,11 +478,28 @@
     gap: 12px;
   }
 
+  .meeting-layout.mobile-panel-open .meeting-stage {
+    visibility: hidden;
+    pointer-events: none;
+    height: 0;
+    overflow: hidden;
+  }
+
   .meeting-side-panel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    bottom: 0;
     width: 100%;
     min-width: 0;
     max-width: none;
-    height: min(55vh, 420px);
+    height: 100dvh;
+    z-index: 30;
+    border-radius: 0;
+    border: 0;
+    transform: translateX(0);
+    opacity: 1;
   }
 
   #main-content,
@@ -492,6 +511,45 @@
   
   #main-content.pin-active #videos {
     min-height: auto;
+  }
+}
+
+.mobile-pip-window {
+  position: fixed;
+  width: clamp(148px, 38vw, 220px);
+  aspect-ratio: 16 / 9;
+  z-index: 35;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 16px 36px rgba(2, 8, 23, 0.42);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  touch-action: none;
+  cursor: grab;
+  background: #0b1220;
+}
+
+.mobile-pip-window:active {
+  cursor: grabbing;
+}
+
+.mobile-pip-window .video-tile {
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
+  border: 0;
+}
+
+.mobile-pip-window .video-tile-pin {
+  display: none;
+}
+
+.mobile-pip-window .video-tile-footer {
+  padding: 8px 10px;
+}
+
+@media (min-width: 768px) {
+  .mobile-pip-window {
+    display: none;
   }
 }
 
@@ -1514,6 +1572,19 @@
   }
 }
 
+@media (max-width: 767px) {
+  .chat-sidebar.chat-sidebar--embedded {
+    position: static;
+    inset: auto;
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+  }
+}
+
 .chat-sidebar-header {
   display: flex;
   align-items: center;
@@ -1915,8 +1986,21 @@
   }
 
   .participants-waiting-item {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .participants-waiting-item .waiting-room-actions {
+    width: auto;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .participants-waiting-item .waiting-room-actions .approve-btn,
+  .participants-waiting-item .waiting-room-actions .deny-btn {
+    flex: 0 0 auto;
+    min-width: 84px;
   }
 
   .participants-sidebar-item {

@@ -64,7 +64,16 @@ export default function MeetingRoom() {
   const relayWarningShownRef = useRef(false);
   const toast = useToast();
   const isChatPanelOpen = activePanel === "chat";
-  const isAttendeesPanelOpen = activePanel === "attendees";
+  const [pipPosition, setPipPosition] = useState({ x: 0, y: 0 });
+  const [pipReady, setPipReady] = useState(false);
+  const pipDragRef = useRef({
+    active: false,
+    pointerId: null,
+    offsetX: 0,
+    offsetY: 0,
+  });
+  const waitingRequestToastRef = useRef(new Set());
+  const backgroundPipVideoRef = useRef(null);
 
   const buildIceServers = useCallback(() => {
     const envTurn = (import.meta.env.VITE_TURN_URLS || "").trim();
@@ -1659,6 +1668,13 @@ export default function MeetingRoom() {
   }, [captionsEnabled, activeSpeakerId]);
 
   const localParticipant = participants.find((participant) => participant.id === "you");
+  const mobilePanelOpen = isMobileView && Boolean(activePanel);
+  const pipParticipant =
+    (pinnedParticipantId && participants.find((participant) => participant.id === pinnedParticipantId)) ||
+    localParticipant ||
+    participants[0] ||
+    null;
+  const shouldShowMobilePip = mobilePanelOpen && Boolean(pipParticipant);
   const participantsPerPage = 8;
   const totalParticipantPages = Math.max(1, Math.ceil(participants.length / participantsPerPage));
   const pagedParticipants = participants.slice(
@@ -1672,6 +1688,117 @@ export default function MeetingRoom() {
   const togglePanel = useCallback((panelName) => {
     setActivePanel((current) => (current === panelName ? null : panelName));
   }, []);
+
+  const getPipSize = useCallback(() => {
+    const width = Math.min(220, Math.max(148, Math.floor(window.innerWidth * 0.38)));
+    const height = Math.floor((width * 9) / 16);
+    return { width, height };
+  }, []);
+
+  const clampPipPosition = useCallback((rawX, rawY) => {
+    const { width, height } = getPipSize();
+    const margin = 10;
+    const maxX = Math.max(margin, window.innerWidth - width - margin);
+    const maxY = Math.max(margin, window.innerHeight - height - margin);
+    return {
+      x: Math.min(Math.max(rawX, margin), maxX),
+      y: Math.min(Math.max(rawY, margin), maxY),
+    };
+  }, [getPipSize]);
+
+  useEffect(() => {
+    if (!shouldShowMobilePip) {
+      setPipReady(false);
+      return;
+    }
+    const { width, height } = getPipSize();
+    const margin = 12;
+    const initialX = window.innerWidth - width - margin;
+    const initialY = window.innerHeight - height - 106;
+    setPipPosition(clampPipPosition(initialX, initialY));
+    setPipReady(true);
+  }, [shouldShowMobilePip, getPipSize, clampPipPosition, activePanel]);
+
+  useEffect(() => {
+    if (!shouldShowMobilePip) return;
+    const handleWindowResize = () => {
+      setPipPosition((prev) => clampPipPosition(prev.x, prev.y));
+    };
+    window.addEventListener("resize", handleWindowResize);
+    return () => window.removeEventListener("resize", handleWindowResize);
+  }, [shouldShowMobilePip, clampPipPosition]);
+
+  const onPipPointerDown = useCallback((event) => {
+    if (!shouldShowMobilePip) return;
+    const targetRect = event.currentTarget.getBoundingClientRect();
+    pipDragRef.current.active = true;
+    pipDragRef.current.pointerId = event.pointerId;
+    pipDragRef.current.offsetX = event.clientX - targetRect.left;
+    pipDragRef.current.offsetY = event.clientY - targetRect.top;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }, [shouldShowMobilePip]);
+
+  const onPipPointerMove = useCallback((event) => {
+    if (!pipDragRef.current.active || pipDragRef.current.pointerId !== event.pointerId) return;
+    const nextX = event.clientX - pipDragRef.current.offsetX;
+    const nextY = event.clientY - pipDragRef.current.offsetY;
+    setPipPosition(clampPipPosition(nextX, nextY));
+  }, [clampPipPosition]);
+
+  const endPipDrag = useCallback((event) => {
+    if (pipDragRef.current.pointerId !== event.pointerId) return;
+    pipDragRef.current.active = false;
+    pipDragRef.current.pointerId = null;
+  }, []);
+
+  useEffect(() => {
+    if (!canManageWaitingRoom || waitingUsers.length === 0) return;
+    const latest = waitingUsers[waitingUsers.length - 1];
+    if (!latest?.client_id || waitingRequestToastRef.current.has(latest.client_id)) return;
+
+    waitingRequestToastRef.current.add(latest.client_id);
+    toast.info(`${latest.name || "A participant"} requested to join.`, { duration: 2600 });
+  }, [waitingUsers, canManageWaitingRoom, toast]);
+
+  useEffect(() => {
+    if (!roomVisible || !pipParticipant?.stream || !backgroundPipVideoRef.current) return;
+    const pipVideo = backgroundPipVideoRef.current;
+    pipVideo.srcObject = pipParticipant.stream;
+    pipVideo.play().catch(() => {});
+  }, [roomVisible, pipParticipant]);
+
+  useEffect(() => {
+    if (!roomVisible || !backgroundPipVideoRef.current) return;
+
+    const handleVisibilityChange = async () => {
+      const pipVideo = backgroundPipVideoRef.current;
+      if (!pipVideo) return;
+
+      if (document.hidden) {
+        if (!document.pictureInPictureEnabled || !pipParticipant?.stream) return;
+        if (document.pictureInPictureElement) return;
+        try {
+          await pipVideo.play();
+          await pipVideo.requestPictureInPicture();
+        } catch {
+          // Best effort only: browser/device support differs.
+        }
+        return;
+      }
+
+      if (document.pictureInPictureElement === pipVideo) {
+        try {
+          await document.exitPictureInPicture();
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [roomVisible, pipParticipant]);
+
   const attendeeList = participants
     .map((participant) => ({
       ...participant,
@@ -1940,7 +2067,7 @@ export default function MeetingRoom() {
           </div>
         )}
 
-        <div className={`meeting-layout${activePanel ? " has-panel-open" : ""}`}>
+        <div className={`meeting-layout${activePanel ? " has-panel-open" : ""}${mobilePanelOpen ? " mobile-panel-open" : ""}`}>
           <div className="meeting-stage">
             {/* Main Content */}
             <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
@@ -2137,6 +2264,33 @@ export default function MeetingRoom() {
             </aside>
           )}
         </div>
+
+        {shouldShowMobilePip && pipReady && (
+          <div
+            className="mobile-pip-window"
+            style={{ left: `${pipPosition.x}px`, top: `${pipPosition.y}px` }}
+            onPointerDown={onPipPointerDown}
+            onPointerMove={onPipPointerMove}
+            onPointerUp={endPipDrag}
+            onPointerCancel={endPipDrag}
+          >
+            <VideoTile
+              key={`pip-${pipParticipant.id}`}
+              {...pipParticipant}
+              captions={captions[pipParticipant.id]}
+              isPinned={false}
+              isMirrored={pipParticipant.isLocal ? isMirrored : false}
+              onTogglePin={() => {}}
+            />
+          </div>
+        )}
+
+        <video
+          ref={backgroundPipVideoRef}
+          playsInline
+          autoPlay
+          style={{ display: "none" }}
+        />
 
         {/* Controls */}
         <ControlsBar
