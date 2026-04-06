@@ -255,7 +255,7 @@ export default function Login() {
         </div>
 
         <h2 style={{ marginBottom: "0.5rem", color: textColor }}>
-          Welcome Back 👋
+          Login Successfully 👋
         </h2>
 
         {info && (

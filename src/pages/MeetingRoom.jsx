@@ -1550,8 +1550,17 @@ export default function MeetingRoom() {
     }
   };
 
+  const canForceMediaOff = useCallback((actionType, targetClientId) => {
+    const targetParticipant = participants.find((p) => p.id === targetClientId);
+    if (!targetParticipant) return false;
+
+    if (actionType === "mute_user") return Boolean(targetParticipant.audioEnabled);
+    if (actionType === "disable_camera") return Boolean(targetParticipant.videoEnabled);
+    return true;
+  }, [participants]);
+
   const sendHostAction = useCallback((type, target_client_id) => {
-    if (!(canAdminControl || isHostUser)) {
+    if (!canAdminControl) {
       toast.warning("Host-only action.");
       return;
     }
@@ -1559,6 +1568,10 @@ export default function MeetingRoom() {
       if (type === "kick_user") {
         toast.warning("Host cannot remove themselves.");
       }
+      return;
+    }
+
+    if ((type === "mute_user" || type === "disable_camera") && !canForceMediaOff(type, target_client_id)) {
       return;
     }
 
@@ -1587,7 +1600,7 @@ export default function MeetingRoom() {
         toast.success("Participant removed");
       }
     }
-  }, [canAdminControl, isHostUser, participants, toast]);
+  }, [canAdminControl, canForceMediaOff, participants, toast]);
 
   const generateAISummary = useCallback(() => {
     if (!canGenerateAI) {
@@ -1781,12 +1794,12 @@ export default function MeetingRoom() {
           </div>
           {!isLoggedIn && (
             <div className="setup-name-input-wrapper">
-              <label htmlFor="nameInput" className="setup-name-label">Display Name</label>
+              <label htmlFor="nameInput" className="setup-name-label">Enter Your Name</label>
               <input
                 type="text"
                 id="nameInput"
                 className="setup-name-input"
-                placeholder="Enter your display name"
+                placeholder="Enter your name"
                 value={myName}
                 onChange={(e) => setMyName(e.target.value)}
               />
@@ -2100,13 +2113,14 @@ export default function MeetingRoom() {
                         {participant.videoEnabled ? <FaVideo /> : <FaVideoSlash />}
                       </div>
                     </div>
-                    {(canAdminControl || isHostUser) && !participant.isSelf && (
+                    {canAdminControl && !participant.isSelf && (
                       <div className="participants-actions" role="group" aria-label={`Host controls for ${participant.displayName}`}>
                         <button
                           type="button"
                           className="participant-action-btn"
                           onClick={() => sendHostAction("mute_user", participant.id)}
-                          title="Mute participant"
+                          disabled={!participant.audioEnabled}
+                          title={participant.audioEnabled ? "Mute participant" : "Participant microphone is already off"}
                           aria-label={`Mute ${participant.displayName}`}
                         >
                           <FaMicrophoneSlash />
@@ -2115,7 +2129,8 @@ export default function MeetingRoom() {
                           type="button"
                           className="participant-action-btn"
                           onClick={() => sendHostAction("disable_camera", participant.id)}
-                          title="Turn camera off"
+                          disabled={!participant.videoEnabled}
+                          title={participant.videoEnabled ? "Turn camera off" : "Participant camera is already off"}
                           aria-label={`Turn off camera for ${participant.displayName}`}
                         >
                           <FaVideoSlash />
