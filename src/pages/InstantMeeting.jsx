@@ -182,7 +182,7 @@ export default function InstantMeeting() {
         style={{
           background: cardBg,
           borderRadius: 16,
-          padding: "3rem 2.5rem",
+          padding: meetingLink ? "2rem 2rem 1.6rem" : "3rem 2.5rem",
           maxWidth: 520,
           width: "100%",
           textAlign: "center",
@@ -332,10 +332,10 @@ export default function InstantMeeting() {
             </div>
 
             {/* Action Buttons */}
-            <div style={{ display: "flex", gap: "0.8rem", marginTop: "1rem" }}>
+            <div style={{ display: "flex", gap: "0.6rem", marginTop: "0.9rem", alignItems: "stretch" }}>
               <ActionButton
                 onClick={joinMeeting}
-                style={{ flex: 1, padding: "0.8rem" }}
+                style={{ flex: 1, padding: "0.68rem 0.85rem", fontSize: "0.95rem", minHeight: 40 }}
               >
                 Join Now
               </ActionButton>
@@ -343,7 +343,7 @@ export default function InstantMeeting() {
               <ActionButton
                 variant="ghost"
                 onClick={() => setShowInvitePopup(true)}
-                style={{ flex: 1, padding: "0.8rem" }}
+                style={{ flex: 1, padding: "0.68rem 0.85rem", fontSize: "0.95rem", minHeight: 40 }}
               >Add Participant</ActionButton>
             </div>
           </>

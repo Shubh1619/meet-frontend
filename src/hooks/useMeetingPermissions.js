@@ -77,7 +77,7 @@ export default function useMeetingPermissions(initialRole = "guest", initialPerm
       canScreenShare:
         isHost ||
         (isUser && permissions.allow_user_screen_share) ||
-        (isGuest && permissions.allow_guest_screen_share),
+        isGuest,
       canAdminControl: isHost,
     };
   }, [permissionState]);

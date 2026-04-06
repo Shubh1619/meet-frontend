@@ -183,6 +183,7 @@ export default function MeetingRoom() {
   const recordingStartedAtRef = useRef(null);
   const remoteStreamsRef = useRef({});
   const hostActionCooldownRef = useRef({});
+  const autoReconnectAttemptedRef = useRef(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -269,6 +270,7 @@ export default function MeetingRoom() {
       myId.current = Math.random().toString(36).substring(2, 10);
       sessionStorage.setItem(sessionKey, myId.current);
     }
+    autoReconnectAttemptedRef.current = false;
   }, [roomId]);
 
   useEffect(() => {
@@ -561,6 +563,7 @@ export default function MeetingRoom() {
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack && audioTrack.enabled) {
         audioTrack.enabled = false;
+        sessionStorage.setItem("micMuted", "true");
         setParticipants((prev) => prev.map((p) => (p.id === "you" ? { ...p, audioEnabled: false } : p)));
         sendStateUpdate();
         toast.info("Your microphone was muted by the host.");
@@ -572,6 +575,7 @@ export default function MeetingRoom() {
       const videoTrack = stream.getVideoTracks()[0];
       if (videoTrack && videoTrack.enabled) {
         videoTrack.enabled = false;
+        sessionStorage.setItem("cameraOff", "true");
         setParticipants((prev) => prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: false } : p)));
         sendStateUpdate();
         toast.info("Your camera was turned off by the host.");
@@ -588,6 +592,7 @@ export default function MeetingRoom() {
     setParticipants((prev) =>
       prev.map((p) => (p.id === "you" ? { ...p, audioEnabled: track.enabled } : p))
     );
+    sessionStorage.setItem("micMuted", String(!track.enabled));
     sendStateUpdate();
   }
 
@@ -600,6 +605,7 @@ export default function MeetingRoom() {
     setParticipants((prev) =>
       prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: track.enabled } : p))
     );
+    sessionStorage.setItem("cameraOff", String(!track.enabled));
     sendStateUpdate();
   }
 
@@ -840,6 +846,7 @@ export default function MeetingRoom() {
     setIsInWaitingRoom(false);
     setUnreadChatCount(0);
     setLeaveConfirmOpen(false);
+    sessionStorage.removeItem(`meeting-active:${roomId}`);
 
     if (shouldRedirect) {
       const targetPath = isLoggedIn ? "/dashboard" : "/login";
@@ -852,7 +859,7 @@ export default function MeetingRoom() {
         window.location.reload();
       }, 40);
     }
-  }, [isHostUser, isLoggedIn, navigate, stopAllMediaTracks]);
+  }, [isHostUser, isLoggedIn, navigate, roomId, stopAllMediaTracks]);
 
   const handleLeaveAction = useCallback(() => {
     if (!isHostUser) {
@@ -1471,11 +1478,15 @@ export default function MeetingRoom() {
 
       if (stream.getAudioTracks()[0] && savedMic) stream.getAudioTracks()[0].enabled = false;
       if (stream.getVideoTracks()[0] && savedCam) stream.getVideoTracks()[0].enabled = false;
+      sessionStorage.setItem("micMuted", String(!(stream.getAudioTracks()[0]?.enabled ?? false)));
+      sessionStorage.setItem("cameraOff", String(!(stream.getVideoTracks()[0]?.enabled ?? false)));
 
       setLocalStreamHandler(stream, resolvedName);
       if (stream.getAudioTracks().length > 0) {
         monitorAudioLevel(stream, "localVideoContainer");
       }
+
+      sessionStorage.setItem(`meeting-active:${room}`, "true");
     } catch (e) {
       hasJoinedRef.current = false;
       console.error("Join error", e);
@@ -1485,6 +1496,35 @@ export default function MeetingRoom() {
 
     connectWebSocket(room, resolvedName, hostMode, sessionId);
   }, [roomId, isLoggedIn, profileUser?.name, myName, connectWebSocket, setLocalStreamHandler, isHostUser, hostSessionId, guestSessionId, ensureGuestSession]);
+
+  useEffect(() => {
+    if (!roomId || autoReconnectAttemptedRef.current) return;
+    if (!setupVisible || roomVisible || isInWaitingRoom) return;
+    if (!meetingReady || !hostAccessResolved || (isLoggedIn && !profileReady)) return;
+    if (sessionStorage.getItem(`meeting-active:${roomId}`) !== "true") return;
+
+    autoReconnectAttemptedRef.current = true;
+    const savedName =
+      sessionStorage.getItem("name") ||
+      sessionStorage.getItem(`meeting-guest-name:${roomId}`) ||
+      myName ||
+      profileUser?.name ||
+      "Guest";
+
+    joinCall(roomId, savedName);
+  }, [
+    roomId,
+    setupVisible,
+    roomVisible,
+    isInWaitingRoom,
+    meetingReady,
+    hostAccessResolved,
+    isLoggedIn,
+    profileReady,
+    myName,
+    profileUser?.name,
+    joinCall,
+  ]);
 
   // ❌ REMOVE THIS BLOCK
   useEffect(() => {
