@@ -17,7 +17,7 @@ import {
 } from "react-icons/fa";
 import { useDarkMode } from "../context/DarkModeContext";
 import { clearAuthSession, getRefreshToken } from "../authSession";
-import { API_BASE } from "../api";
+import { API_BASE, getApiErrorMessage } from "../api";
 import { useToast } from "../components/ToastProvider";
 import PasswordInput from "../components/PasswordInput";
 import AppPopup from "../components/AppPopup";
@@ -256,7 +256,7 @@ export default function Profile() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Failed to change password.");
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to change password."));
 
       const successMsg = data.message || "Password change OTP sent.";
       setPwdSuccess(successMsg);
@@ -302,7 +302,7 @@ export default function Profile() {
         body: JSON.stringify({ otp: cleanedOtp }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Failed to confirm password change.");
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to confirm password change."));
 
       const successMsg = data.message || "Password changed successfully.";
       setPwdSuccess(successMsg);

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import PasswordInput from "../components/PasswordInput";
 import { useDarkMode } from "../context/DarkModeContext";
-import { API_BASE } from "../api";
+import { API_BASE, getApiErrorMessage } from "../api";
 import { useToast } from "../components/ToastProvider";
 import { focusFirstInvalidField } from "../utils/formUtils";
 
@@ -83,7 +83,7 @@ export default function ResetPassword() {
         body: JSON.stringify({ token: tokenFromUrl, new_password: newPassword }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Password reset failed.");
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Password reset failed."));
 
       setSuccess(data.message || "Password reset successful. Please login.");
       toast.success("Password reset successful.");

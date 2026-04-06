@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import PasswordInput from "../components/PasswordInput";
 import { useDarkMode } from "../context/DarkModeContext";
-import { API_BASE } from "../api";
+import { API_BASE, getApiErrorMessage } from "../api";
 import { useToast } from "../components/ToastProvider";
-import { focusFirstInvalidField } from "../utils/formUtils";
+import { focusFirstInvalidField, isValidEmail } from "../utils/formUtils";
 
 export default function Register() {
   const { darkMode } = useDarkMode();
@@ -48,7 +48,11 @@ export default function Register() {
 
     const nextErrors = {};
     if (!name.trim()) nextErrors.name = "Name is required.";
-    if (!email.trim()) nextErrors.email = "Email is required.";
+    if (!email.trim()) {
+      nextErrors.email = "Email is required.";
+    } else if (!isValidEmail(email)) {
+      nextErrors.email = "Invalid email. Please include '@' (example: name@example.com).";
+    }
     if (!pass.trim()) nextErrors.password = "Password is required.";
     if (Object.keys(nextErrors).length) {
       setFieldErrors(nextErrors);
@@ -58,8 +62,10 @@ export default function Register() {
 
     setLoading(true);
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     try {
-      const payload = { name, email, password: pass };
+      const payload = { name: name.trim(), email: normalizedEmail, password: pass };
 
       const res = await fetch(`${API_BASE}/auth/register`, {
         method: "POST",
@@ -72,10 +78,10 @@ export default function Register() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.detail || "Registration failed");
+        throw new Error(getApiErrorMessage(data, "Registration failed"));
       }
 
-      sessionStorage.setItem("pending_verification_email", email.trim().toLowerCase());
+      sessionStorage.setItem("pending_verification_email", normalizedEmail);
       nav("/verify-email", {
         state: {
           message:
@@ -189,6 +195,7 @@ export default function Register() {
           </label>
           <input
             className={`input mt-1 ${fieldErrors.email ? "border-red-500" : ""}`}
+            type="email"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);

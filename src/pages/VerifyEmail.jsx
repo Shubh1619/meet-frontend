@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
-import { API_BASE } from "../api";
+import { API_BASE, getApiErrorMessage } from "../api";
 import { useToast } from "../components/ToastProvider";
 import { focusFirstInvalidField } from "../utils/formUtils";
 
@@ -58,7 +58,7 @@ export default function VerifyEmail() {
         body: JSON.stringify({ email: cleanedEmail, otp: cleanedOtp }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Failed to verify email.");
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to verify email."));
       setSuccess(data.message || "Email verified successfully.");
       toast.success("Email verified successfully.");
       sessionStorage.removeItem("pending_verification_email");
@@ -89,7 +89,7 @@ export default function VerifyEmail() {
         body: JSON.stringify({ email: cleanedEmail }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Failed to resend OTP.");
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to resend OTP."));
       setInfo(data.message || "Verification OTP sent.");
       toast.info("A new OTP has been sent.");
     } catch (err) {

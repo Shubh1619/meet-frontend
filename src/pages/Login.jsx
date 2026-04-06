@@ -4,9 +4,9 @@ import ActionButton from "../components/ActionButton";
 import PasswordInput from "../components/PasswordInput";
 import { useDarkMode } from "../context/DarkModeContext";
 import { popAuthMessage, setAuthSession } from "../authSession";
-import { API_BASE } from "../api";
+import { API_BASE, getApiErrorMessage } from "../api";
 import { useToast } from "../components/ToastProvider";
-import { focusFirstInvalidField } from "../utils/formUtils";
+import { focusFirstInvalidField, isValidEmail } from "../utils/formUtils";
 import AppPopup from "../components/AppPopup";
 
 export default function Login() {
@@ -62,7 +62,11 @@ export default function Login() {
     setFieldErrors({});
 
     const nextErrors = {};
-    if (!email.trim()) nextErrors.email = "Email is required.";
+    if (!email.trim()) {
+      nextErrors.email = "Email is required.";
+    } else if (!isValidEmail(email)) {
+      nextErrors.email = "Invalid email. Please include '@' (example: name@example.com).";
+    }
     if (!pass.trim()) nextErrors.password = "Password is required.";
     if (Object.keys(nextErrors).length) {
       setFieldErrors(nextErrors);
@@ -72,10 +76,12 @@ export default function Login() {
 
     setLoading(true);
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     try {
       const form = new URLSearchParams();
       form.append("grant_type", "password");
-      form.append("username", email);
+      form.append("username", normalizedEmail);
       form.append("password", pass);
       form.append("scope", "");
       form.append("client_id", "string");
@@ -91,7 +97,7 @@ export default function Login() {
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || "Invalid Credentials");
+        throw new Error(getApiErrorMessage(errData, "Invalid Credentials"));
       }
 
       const data = await res.json();
@@ -160,7 +166,7 @@ export default function Login() {
         body: JSON.stringify({ email: normalized, otp: code }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "OTP verification failed.");
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "OTP verification failed."));
       toast.success(data.message || "Email verified. Please login.");
       setShowOtpPopup(false);
       setOtp("");
@@ -185,7 +191,7 @@ export default function Login() {
         body: JSON.stringify({ email: normalized }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Failed to resend OTP.");
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to resend OTP."));
       toast.info(data.message || "OTP resent.");
     } catch (e) {
       toast.error(e?.message || "Failed to resend OTP.");
@@ -284,6 +290,7 @@ export default function Login() {
           <label className="small-muted required-label" style={{ color: mutedColor }}>Email</label>
           <input
             className={`input mt-1 ${fieldErrors.email ? "border-red-500" : ""}`}
+            type="email"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);

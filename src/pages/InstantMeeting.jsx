@@ -4,7 +4,7 @@ import ActionButton from "../components/ActionButton";
 import { apiPost } from "../api";
 import { useDarkMode } from "../context/DarkModeContext";
 import { useToast } from "../components/ToastProvider";
-import { focusFirstInvalidField } from "../utils/formUtils";
+import { focusFirstInvalidField, parseCommaSeparatedEmails } from "../utils/formUtils";
 import AppPopup from "../components/AppPopup";
 
 const PUBLIC_MEETING_BASE = (import.meta.env.VITE_PUBLIC_APP_URL || "https://meet-frontend-4op.pages.dev")
@@ -78,6 +78,12 @@ export default function InstantMeeting() {
     const nextErrors = {};
     if (!title.trim()) nextErrors.title = "Title is required.";
     if (!agenda.trim()) nextErrors.agenda = "Agenda is required.";
+
+    const { emails: participantEmails, invalidEmails } = parseCommaSeparatedEmails(participants);
+    if (invalidEmails.length) {
+      nextErrors.participants = `Invalid email(s): ${invalidEmails.join(", ")}`;
+    }
+
     if (Object.keys(nextErrors).length) {
       setFieldErrors(nextErrors);
       focusFirstInvalidField(e.currentTarget);
@@ -88,9 +94,7 @@ export default function InstantMeeting() {
     const payload = {
       title,
       agenda,
-      participants: participants
-        ? participants.split(",").map((p) => p.trim()).filter(Boolean)
-        : [],
+      participants: participantEmails,
     };
 
     try {
@@ -122,13 +126,15 @@ export default function InstantMeeting() {
     toast.success("Meeting link copied.");
   }
   async function addParticipant() {
-    const invitees = inviteInput
-      .split(",")
-      .map((email) => email.trim().toLowerCase())
-      .filter(Boolean);
+    const { emails: invitees, invalidEmails } = parseCommaSeparatedEmails(inviteInput);
 
     if (!invitees.length) {
       toast.warning("Please enter at least one valid email.");
+      return;
+    }
+
+    if (invalidEmails.length) {
+      toast.error(`Invalid email(s): ${invalidEmails.join(", ")}`);
       return;
     }
 
@@ -268,10 +274,25 @@ export default function InstantMeeting() {
               <input
                 type="text"
                 value={participants}
-                onChange={(e) => setParticipants(e.target.value)}
+                onChange={(e) => {
+                  setParticipants(e.target.value);
+                  setFieldErrors((prev) => {
+                    if (!prev.participants) return prev;
+                    const next = { ...prev };
+                    delete next.participants;
+                    return next;
+                  });
+                }}
+                data-invalid={fieldErrors.participants ? "true" : "false"}
                 placeholder="Enter emails separated by commas"
-                style={{ ...inputStyle, background: inputBg, color: textColor, borderColor }}
+                style={{
+                  ...inputStyle,
+                  background: inputBg,
+                  color: textColor,
+                  borderColor: fieldErrors.participants ? "#dc2626" : borderColor,
+                }}
               />
+              {fieldErrors.participants && <div className="field-error">{fieldErrors.participants}</div>}
 
               <ActionButton
                 type="submit"

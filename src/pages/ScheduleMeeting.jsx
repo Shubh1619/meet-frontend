@@ -14,6 +14,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { apiPost } from "../api";
 import { useToast } from "../components/ToastProvider";
+import { parseCommaSeparatedEmails } from "../utils/formUtils";
 
 const theme = createTheme({
   palette: {
@@ -54,6 +55,7 @@ export default function ScheduleMeeting() {
   const [topic, setTopic] = useState("");
   const [agenda, setAgenda] = useState("");
   const [participants, setParticipants] = useState("");
+  const [participantsError, setParticipantsError] = useState("");
 
   const [date, setDate] = useState(initialDate);
   const [startTime, setStartTime] = useState(dayjs());
@@ -66,6 +68,7 @@ export default function ScheduleMeeting() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setParticipantsError("");
     const currentTime = dayjs();
 
     const combinedStart = dayjs(date)
@@ -100,14 +103,20 @@ export default function ScheduleMeeting() {
       return;
     }
 
+    const { emails: participantEmails, invalidEmails } = parseCommaSeparatedEmails(participants);
+    if (invalidEmails.length) {
+      const message = `Invalid email(s): ${invalidEmails.join(", ")}`;
+      setParticipantsError(message);
+      toast.error(message);
+      return;
+    }
+
     const payload = {
       title: topic.trim(),
       agenda: agenda.trim(),
       start_time: combinedStart.format("YYYY-MM-DDTHH:mm:ss"),
       end_time: combinedEnd.format("YYYY-MM-DDTHH:mm:ss"),
-      participants: participants
-        ? participants.split(",").map((p) => p.trim()).filter(Boolean)
-        : [],
+      participants: participantEmails,
     };
 
     try {
@@ -256,7 +265,12 @@ export default function ScheduleMeeting() {
               margin="dense"
               placeholder="emails separated by commas"
               value={participants}
-              onChange={(e) => setParticipants(e.target.value)}
+              onChange={(e) => {
+                setParticipants(e.target.value);
+                if (participantsError) setParticipantsError("");
+              }}
+              error={Boolean(participantsError)}
+              helperText={participantsError || " "}
             />
 
             <ActionButton

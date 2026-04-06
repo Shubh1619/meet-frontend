@@ -3,6 +3,7 @@ import {
   getRefreshToken,
   setAuthSession,
 } from "./authSession";
+import { formatApiError } from "./utils/formUtils";
 
 const RAW_API_BASE = (import.meta.env.VITE_API_URL || "").trim().replace(/\/+$/, "");
 const IS_LOCAL_HOST =
@@ -11,6 +12,11 @@ const IS_LOCAL_HOST =
 
 export const API_BASE =
   RAW_API_BASE || (IS_LOCAL_HOST ? "http://127.0.0.1:8000" : "https://ai-meeting-assistant-zigx.onrender.com");
+
+export function getApiErrorMessage(payload, fallback = "Request failed") {
+  if (!payload || typeof payload !== "object") return fallback;
+  return formatApiError(payload.detail ?? payload.message ?? payload.error, fallback);
+}
 
 function buildHeaders(extra = {}) {
   const token = getAccessToken();
@@ -79,7 +85,7 @@ export async function apiGet(url) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(error.detail || "GET request failed");
+    throw new Error(getApiErrorMessage(error, "GET request failed"));
   }
 
   return await res.json();
@@ -99,7 +105,7 @@ export async function apiPost(url, body) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(error.detail || "POST request failed");
+    throw new Error(getApiErrorMessage(error, "POST request failed"));
   }
 
   return await res.json();
@@ -119,7 +125,7 @@ export async function apiPut(url, body) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(error.detail || "PUT request failed");
+    throw new Error(getApiErrorMessage(error, "PUT request failed"));
   }
 
   return await res.json();
@@ -138,7 +144,7 @@ export async function apiDelete(url) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({}));
-    throw new Error(error.detail || "DELETE request failed");
+    throw new Error(getApiErrorMessage(error, "DELETE request failed"));
   }
 
   return await res.json();

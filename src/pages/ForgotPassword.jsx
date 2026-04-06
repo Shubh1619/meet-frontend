@@ -2,9 +2,9 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ActionButton from "../components/ActionButton";
 import { useDarkMode } from "../context/DarkModeContext";
-import { API_BASE } from "../api";
+import { API_BASE, getApiErrorMessage } from "../api";
 import { useToast } from "../components/ToastProvider";
-import { focusFirstInvalidField } from "../utils/formUtils";
+import { focusFirstInvalidField, isValidEmail } from "../utils/formUtils";
 
 export default function ForgotPassword() {
   const { darkMode } = useDarkMode();
@@ -34,10 +34,10 @@ export default function ForgotPassword() {
       return;
     }
 
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailPattern.test(cleaned)) {
-      setError("Please enter a valid email address.");
-      setFieldError("Please enter a valid email address.");
+    if (!isValidEmail(cleaned)) {
+      const message = "Invalid email. Please include '@' (example: name@example.com).";
+      setError(message);
+      setFieldError(message);
       focusFirstInvalidField(e.currentTarget);
       return;
     }
@@ -51,7 +51,7 @@ export default function ForgotPassword() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Failed to request password reset.");
+      if (!res.ok) throw new Error(getApiErrorMessage(data, "Failed to request password reset."));
 
       setSuccess(
         data.message
@@ -128,6 +128,7 @@ export default function ForgotPassword() {
           </label>
           <input
             className={`input mt-1 ${fieldError ? "border-red-500" : ""}`}
+            type="email"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
