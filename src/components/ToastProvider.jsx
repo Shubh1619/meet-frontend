@@ -12,6 +12,8 @@ import React, {
 const ToastContext = createContext(null);
 const DEFAULT_DURATION = 3500;
 const FADE_MS = 300;
+const MIN_TOAST_GAP_MS = 450;
+const DUPLICATE_TOAST_WINDOW_MS = 1600;
 
 const TYPE_THEME = {
   primary: "#3b82f6",
@@ -177,6 +179,9 @@ function normalizePushArgs(message, titleOrOptions, durationArg) {
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
+  const lastToastAtRef = useRef(0);
+  const recentToastRef = useRef(new Map());
+  const pendingToastTimersRef = useRef(new Map());
 
   const dismiss = useCallback((id) => {
     setToasts((prev) => prev.filter((toast) => toast.id !== id));
@@ -186,19 +191,66 @@ export function ToastProvider({ children }) {
     setToasts([]);
   }, []);
 
-  const push = useCallback((type, message, titleOrOptions, durationArg) => {
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const normalized = normalizePushArgs(message, titleOrOptions, durationArg);
-    const toast = {
-      id,
-      type: normalizeType(type),
-      message: normalized.message,
-      duration: normalized.duration,
-      actionLabel: normalized.actionLabel,
-      onAction: normalized.onAction,
+  useEffect(() => {
+    return () => {
+      pendingToastTimersRef.current.forEach((timerId) => clearTimeout(timerId));
+      pendingToastTimersRef.current.clear();
+      recentToastRef.current.clear();
     };
-    setToasts((prev) => [...prev, toast]);
-    return id;
+  }, []);
+
+  const push = useCallback((type, message, titleOrOptions, durationArg) => {
+    const normalized = normalizePushArgs(message, titleOrOptions, durationArg);
+    const normalizedType = normalizeType(type);
+    const normalizedMessage =
+      typeof normalized.message === "string"
+        ? normalized.message.trim()
+        : String(normalized.message ?? "");
+
+    if (!normalizedMessage) return null;
+
+    const signature = `${normalizedType}::${normalizedMessage}`;
+    const now = Date.now();
+    const lastSameToastAt = recentToastRef.current.get(signature) || 0;
+
+    // Drop exact duplicate toasts fired repeatedly in a short window.
+    if (now - lastSameToastAt < DUPLICATE_TOAST_WINDOW_MS) {
+      return null;
+    }
+
+    if (pendingToastTimersRef.current.has(signature)) {
+      return null;
+    }
+
+    const emitToast = () => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const toast = {
+        id,
+        type: normalizedType,
+        message: normalizedMessage,
+        duration: normalized.duration,
+        actionLabel: normalized.actionLabel,
+        onAction: normalized.onAction,
+      };
+      setToasts((prev) => [...prev, toast]);
+      const emittedAt = Date.now();
+      lastToastAtRef.current = emittedAt;
+      recentToastRef.current.set(signature, emittedAt);
+      pendingToastTimersRef.current.delete(signature);
+      return id;
+    };
+
+    const elapsedSinceLastToast = now - lastToastAtRef.current;
+    if (elapsedSinceLastToast < MIN_TOAST_GAP_MS) {
+      const waitMs = MIN_TOAST_GAP_MS - elapsedSinceLastToast;
+      const timerId = setTimeout(() => {
+        emitToast();
+      }, waitMs);
+      pendingToastTimersRef.current.set(signature, timerId);
+      return null;
+    }
+
+    return emitToast();
   }, []);
 
   const api = useMemo(
