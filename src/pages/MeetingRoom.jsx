@@ -245,18 +245,36 @@ export default function MeetingRoom() {
     previewVideoRef.current.play().catch(() => {});
   }, [setupVisible, previewStream]);
 
-  const togglePreviewTrack = useCallback((kind) => {
+  const togglePreviewTrack = useCallback(async (kind) => {
     const stream = cameraStreamRef.current;
     if (!stream) return;
     const track = kind === "audio" ? stream.getAudioTracks()[0] : stream.getVideoTracks()[0];
-    if (!track) return;
-    track.enabled = !track.enabled;
     if (kind === "audio") {
+      if (!track) return;
+      track.enabled = !track.enabled;
       setPreviewMicOn(track.enabled);
       return;
     }
-    setPreviewCamOn(track.enabled);
-  }, []);
+    if (track) {
+      track.stop();
+      stream.removeTrack(track);
+      setPreviewCamOn(false);
+      sessionStorage.setItem("cameraOff", "true");
+      return;
+    }
+
+    try {
+      const videoOnlyStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const nextTrack = videoOnlyStream.getVideoTracks()[0];
+      if (!nextTrack) return;
+      stream.addTrack(nextTrack);
+      setPreviewCamOn(true);
+      sessionStorage.setItem("cameraOff", "false");
+    } catch (error) {
+      console.warn("Unable to re-enable preview camera.", error);
+      toast.warning("Camera permission denied. Please allow access to turn video on.");
+    }
+  }, [toast]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -555,6 +573,100 @@ export default function MeetingRoom() {
     }
   }, [myName, profileAvatarUrl, profileUser?.name]);
 
+  const syncVideoTrackForPeers = useCallback((videoTrack) => {
+    Object.values(pcsRef.current).forEach((pc) => {
+      const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+      if (sender) {
+        sender.replaceTrack(videoTrack || null).catch((error) => {
+          console.warn("Failed to update outgoing video track:", error);
+        });
+        return;
+      }
+
+      if (videoTrack && localStreamRef.current) {
+        try {
+          pc.addTrack(videoTrack, localStreamRef.current);
+        } catch (error) {
+          console.warn("Failed to add outgoing video track:", error);
+        }
+      }
+    });
+  }, []);
+
+  const disableLocalCameraCapture = useCallback(() => {
+    const cameraStream = cameraStreamRef.current;
+    const cameraVideoTracks = cameraStream?.getVideoTracks?.() || [];
+    const stoppedVideoTrackIds = new Set(cameraVideoTracks.map((track) => track.id));
+
+    cameraVideoTracks.forEach((track) => {
+      track.stop();
+      cameraStream.removeTrack(track);
+    });
+
+    if (localStreamRef.current && stoppedVideoTrackIds.size > 0) {
+      localStreamRef.current.getVideoTracks().forEach((track) => {
+        if (stoppedVideoTrackIds.has(track.id)) {
+          localStreamRef.current.removeTrack(track);
+        }
+      });
+    }
+
+    if (!isScreenSharing) {
+      syncVideoTrackForPeers(null);
+      setParticipants((prev) =>
+        prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: false } : p))
+      );
+    }
+
+    sessionStorage.setItem("cameraOff", "true");
+    sendStateUpdate();
+  }, [isScreenSharing, sendStateUpdate, syncVideoTrackForPeers]);
+
+  const enableLocalCameraCapture = useCallback(async () => {
+    const currentCameraTrack = cameraStreamRef.current?.getVideoTracks?.()[0];
+    if (currentCameraTrack) {
+      currentCameraTrack.enabled = true;
+      setParticipants((prev) =>
+        prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: true } : p))
+      );
+      sessionStorage.setItem("cameraOff", "false");
+      sendStateUpdate();
+      return true;
+    }
+
+    try {
+      const videoOnlyStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const nextVideoTrack = videoOnlyStream.getVideoTracks()[0];
+      if (!nextVideoTrack) return false;
+
+      if (!cameraStreamRef.current) {
+        cameraStreamRef.current = new MediaStream();
+      }
+      cameraStreamRef.current.addTrack(nextVideoTrack);
+
+      if (localStreamRef.current) {
+        localStreamRef.current.addTrack(nextVideoTrack);
+      } else {
+        const baseStream = new MediaStream();
+        const audioTrack = cameraStreamRef.current.getAudioTracks()[0];
+        if (audioTrack) baseStream.addTrack(audioTrack);
+        baseStream.addTrack(nextVideoTrack);
+        localStreamRef.current = baseStream;
+      }
+
+      if (!isScreenSharing) {
+        syncVideoTrackForPeers(nextVideoTrack);
+        setLocalStreamHandler(localStreamRef.current, myName || profileUser?.name || "Guest");
+      }
+      sessionStorage.setItem("cameraOff", "false");
+      sendStateUpdate();
+      return true;
+    } catch (error) {
+      console.warn("Camera permission denied or unavailable while enabling camera.", error);
+      return false;
+    }
+  }, [isScreenSharing, myName, profileUser?.name, sendStateUpdate, setLocalStreamHandler, syncVideoTrackForPeers]);
+
   const applyForcedLocalState = useCallback((actionType) => {
     const stream = localStreamRef.current;
     if (!stream) return;
@@ -572,16 +684,15 @@ export default function MeetingRoom() {
     }
 
     if (actionType === "disable_camera") {
-      const videoTrack = stream.getVideoTracks()[0];
-      if (videoTrack && videoTrack.enabled) {
-        videoTrack.enabled = false;
-        sessionStorage.setItem("cameraOff", "true");
-        setParticipants((prev) => prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: false } : p)));
-        sendStateUpdate();
+      const hasLiveCameraTrack = (cameraStreamRef.current?.getVideoTracks?.() || []).some(
+        (track) => track.readyState === "live"
+      );
+      if (hasLiveCameraTrack) {
+        disableLocalCameraCapture();
         toast.info("Your camera was turned off by the host.");
       }
     }
-  }, [sendStateUpdate, toast]);
+  }, [disableLocalCameraCapture, toast]);
 
   function toggleMic() {
     const stream = localStreamRef.current;
@@ -596,17 +707,30 @@ export default function MeetingRoom() {
     sendStateUpdate();
   }
 
-  function toggleCamera() {
+  async function toggleCamera() {
     const stream = localStreamRef.current;
     if (!stream) return;
-    const track = stream.getVideoTracks()[0];
-    if (!track) return;
-    track.enabled = !track.enabled;
-    setParticipants((prev) =>
-      prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: track.enabled } : p))
+
+    const hasLiveVideoTrack = (cameraStreamRef.current?.getVideoTracks?.() || []).some(
+      (track) => track.readyState === "live"
     );
-    sessionStorage.setItem("cameraOff", String(!track.enabled));
-    sendStateUpdate();
+    if (hasLiveVideoTrack) {
+      disableLocalCameraCapture();
+      toast.info("Camera is fully turned off.");
+      return;
+    }
+
+    const enabled = await enableLocalCameraCapture();
+    if (!enabled) {
+      setParticipants((prev) =>
+        prev.map((p) => (p.id === "you" ? { ...p, videoEnabled: false } : p))
+      );
+      sessionStorage.setItem("cameraOff", "true");
+      sendStateUpdate();
+      toast.warning("Camera access denied. Please allow permission to turn it back on.");
+      return;
+    }
+
   }
 
   const toggleScreenShare = useCallback(async () => {
@@ -1460,10 +1584,12 @@ export default function MeetingRoom() {
         sessionId = await ensureGuestSession(resolvedName);
       }
 
+      const savedMic = sessionStorage.getItem("micMuted") === "true";
+      const savedCam = sessionStorage.getItem("cameraOff") === "true";
       let stream = cameraStreamRef.current;
       if (!stream) {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          stream = await navigator.mediaDevices.getUserMedia({ video: !savedCam, audio: true });
         } catch (mediaError) {
           console.warn("Media unavailable. Joining without camera/microphone.", mediaError);
           stream = new MediaStream();
@@ -1472,12 +1598,13 @@ export default function MeetingRoom() {
       }
 
       cameraStreamRef.current = stream;
-
-      const savedMic = sessionStorage.getItem("micMuted") === "true";
-      const savedCam = sessionStorage.getItem("cameraOff") === "true";
-
       if (stream.getAudioTracks()[0] && savedMic) stream.getAudioTracks()[0].enabled = false;
-      if (stream.getVideoTracks()[0] && savedCam) stream.getVideoTracks()[0].enabled = false;
+      if (savedCam) {
+        stream.getVideoTracks().forEach((track) => {
+          track.stop();
+          stream.removeTrack(track);
+        });
+      }
       sessionStorage.setItem("micMuted", String(!(stream.getAudioTracks()[0]?.enabled ?? false)));
       sessionStorage.setItem("cameraOff", String(!(stream.getVideoTracks()[0]?.enabled ?? false)));
 
@@ -1838,6 +1965,24 @@ export default function MeetingRoom() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [roomVisible, pipParticipant]);
+
+  useEffect(() => {
+    if (!roomVisible) return;
+
+    const handleBackgroundState = () => {
+      if (document.hidden) {
+        disableLocalCameraCapture();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleBackgroundState);
+    window.addEventListener("pagehide", handleBackgroundState);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleBackgroundState);
+      window.removeEventListener("pagehide", handleBackgroundState);
+    };
+  }, [disableLocalCameraCapture, roomVisible]);
 
   const attendeeList = participants
     .map((participant) => ({
