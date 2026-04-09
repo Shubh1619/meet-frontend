@@ -184,6 +184,7 @@ export default function MeetingRoom() {
   const remoteStreamsRef = useRef({});
   const hostActionCooldownRef = useRef({});
   const autoReconnectAttemptedRef = useRef(false);
+  const iceErrorLogRef = useRef(new Set());
 
   useEffect(() => {
     const handleResize = () => {
@@ -199,6 +200,39 @@ export default function MeetingRoom() {
     setSupportsScreenShare(canUseDisplayMedia);
     setSupportsRecording(canUseDisplayMedia && canUseMediaRecorder);
   }, []);
+
+  const isRecoverableCameraError = useCallback((error) => {
+    const errorName = error?.name || "";
+    return errorName === "NotReadableError" || errorName === "AbortError" || errorName === "TrackStartError";
+  }, []);
+
+  const acquireVideoTrackWithRecovery = useCallback(async () => {
+    const getVideoTrack = async () => {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      return stream.getVideoTracks()[0] || null;
+    };
+
+    try {
+      return await getVideoTrack();
+    } catch (firstError) {
+      if (!isRecoverableCameraError(firstError)) {
+        throw firstError;
+      }
+
+      const existingTracks = cameraStreamRef.current?.getVideoTracks?.() || [];
+      existingTracks.forEach((track) => {
+        try {
+          track.stop();
+        } catch {
+          // ignore
+        }
+        cameraStreamRef.current?.removeTrack?.(track);
+      });
+
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      return await getVideoTrack();
+    }
+  }, [isRecoverableCameraError]);
 
   useEffect(() => {
     if (!setupVisible || !meetingReady || !hostAccessResolved || meetingLoadError) return;
@@ -225,10 +259,23 @@ export default function MeetingRoom() {
         if (cancelled) return;
         console.warn("Preview media unavailable. Continuing without media.", error);
         const fallbackStream = new MediaStream();
+        try {
+          const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          const audioTrack = audioOnly.getAudioTracks()[0];
+          if (audioTrack) fallbackStream.addTrack(audioTrack);
+        } catch {
+          // ignore audio fallback failures
+        }
+        try {
+          const videoTrack = await acquireVideoTrackWithRecovery();
+          if (videoTrack) fallbackStream.addTrack(videoTrack);
+        } catch {
+          // ignore video fallback failures
+        }
         cameraStreamRef.current = fallbackStream;
         setPreviewStream(fallbackStream);
-        setPreviewMicOn(false);
-        setPreviewCamOn(false);
+        setPreviewMicOn(fallbackStream.getAudioTracks()[0]?.enabled ?? false);
+        setPreviewCamOn(fallbackStream.getVideoTracks()[0]?.enabled ?? false);
       }
     }
 
@@ -236,7 +283,7 @@ export default function MeetingRoom() {
     return () => {
       cancelled = true;
     };
-  }, [setupVisible, meetingReady, hostAccessResolved, meetingLoadError]);
+  }, [acquireVideoTrackWithRecovery, setupVisible, meetingReady, hostAccessResolved, meetingLoadError]);
 
   useEffect(() => {
     if (!setupVisible || !previewVideoRef.current) return;
@@ -264,17 +311,20 @@ export default function MeetingRoom() {
     }
 
     try {
-      const videoOnlyStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      const nextTrack = videoOnlyStream.getVideoTracks()[0];
+      const nextTrack = await acquireVideoTrackWithRecovery();
       if (!nextTrack) return;
       stream.addTrack(nextTrack);
       setPreviewCamOn(true);
       sessionStorage.setItem("cameraOff", "false");
     } catch (error) {
       console.warn("Unable to re-enable preview camera.", error);
+      if (isRecoverableCameraError(error)) {
+        toast.warning("Camera is busy in another app/tab. Close it and try again.");
+        return;
+      }
       toast.warning("Camera permission denied. Please allow access to turn video on.");
     }
-  }, [toast]);
+  }, [acquireVideoTrackWithRecovery, isRecoverableCameraError, toast]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -573,9 +623,21 @@ export default function MeetingRoom() {
     }
   }, [myName, profileAvatarUrl, profileUser?.name]);
 
+  const getVideoSenderForPeer = useCallback((pc) => {
+    const directSender = pc.getSenders().find((s) => s.track?.kind === "video");
+    if (directSender) return directSender;
+
+    const videoTransceiver = pc.getTransceivers().find((t) => {
+      const senderKind = t.sender?.track?.kind;
+      const receiverKind = t.receiver?.track?.kind;
+      return senderKind === "video" || receiverKind === "video";
+    });
+    return videoTransceiver?.sender || null;
+  }, []);
+
   const syncVideoTrackForPeers = useCallback((videoTrack) => {
     Object.values(pcsRef.current).forEach((pc) => {
-      const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+      const sender = getVideoSenderForPeer(pc);
       if (sender) {
         sender.replaceTrack(videoTrack || null).catch((error) => {
           console.warn("Failed to update outgoing video track:", error);
@@ -591,7 +653,7 @@ export default function MeetingRoom() {
         }
       }
     });
-  }, []);
+  }, [getVideoSenderForPeer]);
 
   const disableLocalCameraCapture = useCallback(() => {
     const cameraStream = cameraStreamRef.current;
@@ -635,8 +697,7 @@ export default function MeetingRoom() {
     }
 
     try {
-      const videoOnlyStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-      const nextVideoTrack = videoOnlyStream.getVideoTracks()[0];
+      const nextVideoTrack = await acquireVideoTrackWithRecovery();
       if (!nextVideoTrack) return false;
 
       if (!cameraStreamRef.current) {
@@ -665,7 +726,7 @@ export default function MeetingRoom() {
       console.warn("Camera permission denied or unavailable while enabling camera.", error);
       return false;
     }
-  }, [isScreenSharing, myName, profileUser?.name, sendStateUpdate, setLocalStreamHandler, syncVideoTrackForPeers]);
+  }, [acquireVideoTrackWithRecovery, isScreenSharing, myName, profileUser?.name, sendStateUpdate, setLocalStreamHandler, syncVideoTrackForPeers]);
 
   const applyForcedLocalState = useCallback((actionType) => {
     const stream = localStreamRef.current;
@@ -716,7 +777,6 @@ export default function MeetingRoom() {
     );
     if (hasLiveVideoTrack) {
       disableLocalCameraCapture();
-      toast.info("Camera is fully turned off.");
       return;
     }
 
@@ -754,7 +814,7 @@ export default function MeetingRoom() {
         screenStreamRef.current = displayStream;
 
         Object.values(pcsRef.current).forEach((pc) => {
-          const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
+          const sender = getVideoSenderForPeer(pc);
           if (sender) sender.replaceTrack(screenTrack);
         });
 
@@ -771,7 +831,7 @@ export default function MeetingRoom() {
               const camTrack = cameraStreamRef.current?.getVideoTracks?.()[0];
               if (camTrack) {
                 Object.values(pcsRef.current).forEach((pc) => {
-                  const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
+                  const sender = getVideoSenderForPeer(pc);
                   if (sender) sender.replaceTrack(camTrack);
                 });
 
@@ -800,7 +860,7 @@ export default function MeetingRoom() {
     if (!camTrack) return;
 
     Object.values(pcsRef.current).forEach((pc) => {
-      const sender = pc.getSenders().find((s) => s.track && s.track.kind === "video");
+      const sender = getVideoSenderForPeer(pc);
       if (sender) sender.replaceTrack(camTrack);
     });
 
@@ -815,7 +875,7 @@ export default function MeetingRoom() {
       screenStreamRef.current.getTracks().forEach((track) => track.stop());
       screenStreamRef.current = null;
     }
-  }, [supportsScreenShare, canScreenShare, isScreenSharing, myName, setLocalStreamHandler, toast]);
+  }, [supportsScreenShare, canScreenShare, isScreenSharing, myName, setLocalStreamHandler, toast, getVideoSenderForPeer]);
 
   useEffect(() => {
     if (!canScreenShare && isScreenSharing) {
@@ -1183,6 +1243,21 @@ export default function MeetingRoom() {
     };
 
     pc.onicecandidateerror = (event) => {
+      const fingerprint = `${remoteId}|${event?.errorCode}|${event?.url || ""}`;
+      if (iceErrorLogRef.current.has(fingerprint)) return;
+      iceErrorLogRef.current.add(fingerprint);
+
+      // 701 is usually a transient STUN lookup/connectivity issue and often non-fatal.
+      if (event?.errorCode === 701) {
+        console.debug("[WebRTC] transient ICE candidate issue", {
+          remoteId,
+          errorCode: event.errorCode,
+          errorText: event.errorText,
+          url: event.url,
+        });
+        return;
+      }
+
       console.warn("[WebRTC] ICE candidate error", {
         remoteId,
         address: event.address,
@@ -1836,6 +1911,7 @@ export default function MeetingRoom() {
 
   const localParticipant = participants.find((participant) => participant.id === "you");
   const mobilePanelOpen = isMobileView && Boolean(activePanel);
+  const desktopPanelOpen = !isMobileView && Boolean(activePanel);
   const pipParticipant =
     (pinnedParticipantId && participants.find((participant) => participant.id === pinnedParticipantId)) ||
     localParticipant ||
@@ -1849,8 +1925,14 @@ export default function MeetingRoom() {
     participantPage * participantsPerPage + participantsPerPage
   );
   const activeGridParticipants = pinnedParticipantId ? participants : pagedParticipants;
+  const activeGridCount = Math.min(activeGridParticipants.length || 1, 8);
+  const participantGridClassName = `participant-grid participants-${activeGridCount}${desktopPanelOpen ? " panel-open-grid" : ""}`;
   const waitingCount = waitingUsers.length;
   const canManageWaitingRoom = canAdminControl || isHostUser;
+  const localVideoTrackLive = (localParticipant?.stream?.getVideoTracks?.() || localStreamRef.current?.getVideoTracks?.() || [])
+    .some((track) => track.readyState === "live" && track.enabled !== false);
+  const localAudioTrackLive = (localParticipant?.stream?.getAudioTracks?.() || localStreamRef.current?.getAudioTracks?.() || [])
+    .some((track) => track.readyState === "live" && track.enabled !== false);
 
   const togglePanel = useCallback((panelName) => {
     setActivePanel((current) => (current === panelName ? null : panelName));
@@ -2234,29 +2316,11 @@ export default function MeetingRoom() {
           </div>
         </div>
 
-        {/* Waiting room requests (host only) */}
-        {canManageWaitingRoom && waitingUsers.length > 0 && (
-          <div className="waiting-room-notification">
-            <div className="waiting-room-heading">
-              <strong>New user requests waiting approval</strong>
-              <span>{waitingUsers.length} pending</span>
-            </div>
-            <div className="waiting-room-actions">
-              <button
-                className="approve-btn"
-                onClick={() => setActivePanel("attendees")}
-              >
-                Open Waiting List
-              </button>
-            </div>
-          </div>
-        )}
-
         <div className={`meeting-layout${activePanel ? " has-panel-open" : ""}${mobilePanelOpen ? " mobile-panel-open" : ""}`}>
           <div className="meeting-stage">
             {/* Main Content */}
             <div id="main-content" className={pinnedParticipantId ? "pin-active" : ""}>
-              <div id="videos" className={`participant-grid participants-${Math.min(activeGridParticipants.length || 1, 8)}`}>
+              <div id="videos" className={participantGridClassName}>
                 {activeGridParticipants
                   .filter((p) => !pinnedParticipantId || p.id === pinnedParticipantId)
                   .map((p) => (
@@ -2479,8 +2543,8 @@ export default function MeetingRoom() {
 
         {/* Controls */}
         <ControlsBar
-          isMicOn={localParticipant?.audioEnabled ?? true}
-          isCameraOn={localParticipant?.videoEnabled ?? true}
+          isMicOn={localAudioTrackLive || (localParticipant?.audioEnabled ?? false)}
+          isCameraOn={localVideoTrackLive || (localParticipant?.videoEnabled ?? false)}
           isSharingScreen={isScreenSharing}
           isRecording={isRecording}
           captionsEnabled={captionsEnabled}

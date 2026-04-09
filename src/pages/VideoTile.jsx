@@ -41,12 +41,18 @@ const VideoTile = ({
     return `linear-gradient(135deg, ${from}, ${to})`;
   }, [displayName]);
 
-  const hasLiveVideoTrack = useMemo(() => {
-    const tracks = stream?.getVideoTracks?.() || [];
-    return tracks.some((track) => track.readyState === "live");
-  }, [stream]);
+  const videoTracks = stream?.getVideoTracks?.() || [];
+  const audioTracks = stream?.getAudioTracks?.() || [];
+  const hasLiveVideoTrack = videoTracks.some(
+    (track) => track.readyState === "live" && track.enabled !== false
+  );
+  const hasLiveAudioTrack = audioTracks.some(
+    (track) => track.readyState === "live" && track.enabled !== false
+  );
 
-  const shouldShowCameraOff = !hasLiveVideoTrack;
+  const effectiveVideoEnabled = stream ? hasLiveVideoTrack : Boolean(videoEnabled);
+  const effectiveAudioEnabled = stream ? hasLiveAudioTrack : Boolean(audioEnabled);
+  const shouldShowCameraOff = !effectiveVideoEnabled;
   
   // Check mobile on mount and resize
   useEffect(() => {
@@ -68,6 +74,7 @@ const VideoTile = ({
         videoRef.current?.play?.().catch((e) => console.log('Video play error:', e));
       };
       videoRef.current.onloadedmetadata = playVideo;
+      stream.onaddtrack = playVideo;
       playVideo();
 
       const tracks = [
@@ -81,6 +88,9 @@ const VideoTile = ({
     return () => {
       if (videoRef.current) {
         videoRef.current.onloadedmetadata = null;
+      }
+      if (stream) {
+        stream.onaddtrack = null;
       }
       const tracks = [
         ...(stream?.getVideoTracks?.() || []),
@@ -220,8 +230,8 @@ const VideoTile = ({
           {displayName} {isLocal && '(You)'}
         </div>
         <div className="video-tile-status">
-          {audioEnabled ? <FaMicrophone /> : <FaMicrophoneSlash />}
-          {videoEnabled ? <FaVideo /> : <FaVideoSlash />}
+          {effectiveAudioEnabled ? <FaMicrophone /> : <FaMicrophoneSlash />}
+          {effectiveVideoEnabled ? <FaVideo /> : <FaVideoSlash />}
         </div>
       </div>
     </div>
