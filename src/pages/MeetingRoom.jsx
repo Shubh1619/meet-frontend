@@ -1247,13 +1247,26 @@ export default function MeetingRoom() {
       if (iceErrorLogRef.current.has(fingerprint)) return;
       iceErrorLogRef.current.add(fingerprint);
 
-      // 701 is usually a transient STUN lookup/connectivity issue and often non-fatal.
-      if (event?.errorCode === 701) {
+      const transientErrorCodes = new Set([300, 400, 401, 403, 438, 487, 500, 701]);
+      const isTransient = transientErrorCodes.has(Number(event?.errorCode));
+      const connectionState = pc.connectionState || "";
+      const iceState = pc.iceConnectionState || "";
+      const isConnectionStable =
+        connectionState === "connected" ||
+        connectionState === "connecting" ||
+        iceState === "connected" ||
+        iceState === "completed" ||
+        iceState === "checking";
+
+      // Most ICE candidate errors are recoverable while WebRTC is still checking candidates.
+      if (isTransient || isConnectionStable) {
         console.debug("[WebRTC] transient ICE candidate issue", {
           remoteId,
           errorCode: event.errorCode,
           errorText: event.errorText,
           url: event.url,
+          connectionState,
+          iceState,
         });
         return;
       }
@@ -1264,6 +1277,8 @@ export default function MeetingRoom() {
         url: event.url,
         errorCode: event.errorCode,
         errorText: event.errorText,
+        connectionState,
+        iceState,
       });
     };
 
