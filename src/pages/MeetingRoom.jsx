@@ -1169,10 +1169,11 @@ export default function MeetingRoom() {
       console.debug("[WebRTC] adding local tracks to peer", remoteId, localTracks.map((t) => t.kind));
       localTracks.forEach((track) => pc.addTrack(track, localStreamRef.current));
     } else {
-      // Allow media-less users to still receive remote audio/video.
-      pc.addTransceiver("audio", { direction: "recvonly" });
-      pc.addTransceiver("video", { direction: "recvonly" });
-      console.debug("[WebRTC] no local tracks. Added recvonly transceivers for", remoteId);
+      // Keep senders negotiated even when camera/mic are currently off, so later replaceTrack()
+      // can resume publishing without fragile renegotiation edge cases.
+      pc.addTransceiver("audio", { direction: "sendrecv" });
+      pc.addTransceiver("video", { direction: "sendrecv" });
+      console.debug("[WebRTC] no local tracks. Added sendrecv transceivers for", remoteId);
     }
 
     pc.ontrack = (e) => {
